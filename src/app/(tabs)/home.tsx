@@ -13,6 +13,7 @@ import {
   StyleSheet,
   TextInput,
   View,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -95,9 +96,54 @@ const EVENTS: EventItem[] = [
   { titleKey: 'eventKathaSession', date: 'May 10, 2026', time: '7:00 PM' },
 ];
 
+type DropdownItem = {
+  labelKey: TranslationKey;
+  icon: IconName;
+  onPress: () => void;
+  danger?: boolean;
+};
+
 export default function HomeScreen() {
   const t = useT();
   const [search, setSearch] = useState('');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
+  const menuBtnRef = useRef<View>(null);
+
+  const openMenu = () => {
+    menuBtnRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+      const screenWidth = Dimensions.get('window').width;
+      setDropdownPos({
+        top: pageY + height + 4,
+        right: screenWidth - pageX - width,
+      });
+      setMenuOpen(true);
+    });
+  };
+
+  const DROPDOWN_ITEMS: DropdownItem[] = [
+    {
+      labelKey: 'registerAsPandit',
+      icon: ICON_REGISTER,
+      onPress: () => { setMenuOpen(false); router.push('/pandit-register'); },
+    },
+    {
+      labelKey: 'registerMandir',
+      icon: { ios: 'building.columns.fill', android: 'account_balance', web: 'account_balance' },
+      onPress: () => { setMenuOpen(false); router.push('/mandir-register'); },
+    },
+    {
+      labelKey: 'notifications',
+      icon: { ios: 'bell.fill', android: 'notifications', web: 'notifications' },
+      onPress: () => { setMenuOpen(false); router.push('/notifications'); },
+    },
+    {
+      labelKey: 'logout',
+      icon: { ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' },
+      onPress: () => { setMenuOpen(false); router.replace('/'); },
+      danger: true,
+    },
+  ];
 
   return (
     <View style={styles.root}>
@@ -119,28 +165,17 @@ export default function HomeScreen() {
               <ThemedText style={styles.brandText}>{t('brand')}</ThemedText>
               <ThemedText style={styles.brandTagline}>{t('brandTagline')}</ThemedText>
             </View>
+
+            {/* Menu button */}
             <Pressable
-              accessibilityLabel="Notifications"
+              ref={menuBtnRef}
+              accessibilityLabel="Menu"
+              onPress={openMenu}
               style={({ pressed }) => [styles.headerIconBtn, pressed && styles.pressed]}>
               <SymbolView
-                name={{ ios: 'bell.fill', android: 'notifications', web: 'notifications' }}
+                name={{ ios: 'ellipsis', android: 'more_vert', web: 'more_vert' }}
                 tintColor="#FFFFFF"
-                size={20}
-              />
-              <View style={styles.notifDot} />
-            </Pressable>
-            <Pressable
-              accessibilityLabel="Logout"
-              onPress={() => router.replace('/')}
-              style={({ pressed }) => [styles.headerIconBtn, pressed && styles.pressed]}>
-              <SymbolView
-                name={{
-                  ios: 'rectangle.portrait.and.arrow.right',
-                  android: 'logout',
-                  web: 'logout',
-                }}
-                tintColor="#FFFFFF"
-                size={20}
+                size={22}
               />
             </Pressable>
           </View>
@@ -161,6 +196,38 @@ export default function HomeScreen() {
           </View>
         </SafeAreaView>
       </LinearGradient>
+
+      {menuOpen && dropdownPos && (
+        <>
+          {/* Full-screen overlay to close on outside tap */}
+          <TouchableWithoutFeedback onPress={() => setMenuOpen(false)}>
+            <View style={StyleSheet.absoluteFillObject} />
+          </TouchableWithoutFeedback>
+
+          {/* Dropdown rendered at root level — no clipping, no overlap */}
+          <View style={[styles.dropdownMenu, { top: dropdownPos.top, right: dropdownPos.right }]}>
+            {DROPDOWN_ITEMS.map((item, i) => (
+              <Pressable
+                key={item.labelKey}
+                onPress={item.onPress}
+                style={({ pressed }) => [
+                  styles.dropdownItem,
+                  i < DROPDOWN_ITEMS.length - 1 && styles.dropdownItemDivider,
+                  pressed && styles.pressed,
+                ]}>
+                <SymbolView
+                  name={item.icon}
+                  tintColor={item.danger ? '#DC2626' : BRAND.primary}
+                  size={16}
+                />
+                <ThemedText style={[styles.dropdownItemText, item.danger && styles.dropdownItemDanger]}>
+                  {t(item.labelKey)}
+                </ThemedText>
+              </Pressable>
+            ))}
+          </View>
+        </>
+      )}
 
       <ScrollView
         style={styles.scroll}
@@ -413,16 +480,39 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  notifDot: {
+  dropdownMenu: {
     position: 'absolute',
-    top: 8,
-    right: 9,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#DC2626',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#FFFFFF',
+    borderColor: BRAND.border,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 18,
+    elevation: 12,
+    minWidth: 220,
+    overflow: 'hidden',
+    zIndex: 999,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  dropdownItemDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+  },
+  dropdownItemText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: BRAND.text,
+  },
+  dropdownItemDanger: {
+    color: '#DC2626',
   },
   brandText: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
   brandTagline: { fontSize: 12, color: '#FFE7CF', marginTop: 2 },

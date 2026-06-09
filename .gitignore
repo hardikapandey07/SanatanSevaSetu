@@ -41,3 +41,9 @@ example
 # generated native folders
 /ios
 /android
+
+# backup archives
+*.zip
+
+# local Claude config (machine-specific permissions)
+.claude/settings.local.json

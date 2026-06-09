@@ -1,7 +1,7 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
@@ -23,50 +23,21 @@ const BRAND = {
   shadow: '#000',
 };
 
-const RESEND_SECONDS = 30;
-
 export default function RegisterScreen() {
   const t = useT();
   const router = useRouter();
   const [name, setName] = useState('');
   const [mobile, setMobile] = useState('');
-  const [otp, setOtp] = useState('');
   const [referral, setReferral] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [remaining, setRemaining] = useState(0);
-
-  useEffect(() => {
-    if (remaining <= 0) return;
-    const id = setInterval(() => setRemaining(r => (r > 0 ? r - 1 : 0)), 1000);
-    return () => clearInterval(id);
-  }, [remaining]);
 
   const mobileValid = mobile.length === 10;
-  const otpValid = otp.length === 6;
   const nameValid = name.trim().length >= 1;
-  const canSendOtp = mobileValid && remaining === 0;
-  const canRegister = nameValid && mobileValid && otpValid;
+  const canSendOtp = mobileValid && nameValid;
 
   const handleSendOtp = () => {
     if (!canSendOtp) return;
-    setOtpSent(true);
-    setRemaining(RESEND_SECONDS);
-    if (Platform.OS === 'web') {
-      // eslint-disable-next-line no-alert
-      window.alert(`OTP sent to +91 ${mobile}`);
-    }
+    router.push({ pathname: '/otp-verification', params: { mobile } });
   };
-
-  const handleRegister = () => {
-    if (!canRegister) return;
-    router.replace('/(tabs)/home');
-  };
-
-  const otpButtonLabel = !otpSent
-    ? t('sendOtp')
-    : remaining > 0
-      ? `${t('resendOtpInSeconds')} ${remaining}s`
-      : t('resendOtp');
 
   return (
     <View style={styles.root}>
@@ -116,46 +87,6 @@ export default function RegisterScreen() {
             />
           </Field>
 
-          <View style={styles.field}>
-            <ThemedText style={styles.fieldLabel}>{t('otpVerification')}</ThemedText>
-            <View style={styles.otpRow}>
-              <View
-                style={[
-                  styles.inputWrap,
-                  { flex: 1 },
-                  !otpSent && styles.inputWrapDisabled,
-                ]}>
-                <TextInput
-                  value={otp}
-                  onChangeText={txt => setOtp(txt.replace(/\D/g, '').slice(0, 6))}
-                  placeholder={t('enterOtp')}
-                  placeholderTextColor={BRAND.textSecondary}
-                  keyboardType="number-pad"
-                  inputMode="numeric"
-                  maxLength={6}
-                  editable={otpSent}
-                  style={[styles.input, !otpSent && styles.inputDisabled]}
-                />
-              </View>
-              <Pressable
-                onPress={handleSendOtp}
-                disabled={!canSendOtp}
-                style={({ pressed }) => [
-                  styles.sendOtpBtn,
-                  !canSendOtp && styles.sendOtpBtnDisabled,
-                  pressed && canSendOtp && styles.pressed,
-                ]}>
-                <ThemedText
-                  style={[
-                    styles.sendOtpText,
-                    !canSendOtp && styles.sendOtpTextDisabled,
-                  ]}>
-                  {otpButtonLabel}
-                </ThemedText>
-              </Pressable>
-            </View>
-          </View>
-
           <Field label={t('referralOptional')}>
             <TextInput
               value={referral}
@@ -168,19 +99,15 @@ export default function RegisterScreen() {
           </Field>
 
           <Pressable
-            onPress={handleRegister}
-            disabled={!canRegister}
-            style={({ pressed }) => [
-              styles.cta,
-              !canRegister && styles.ctaDisabled,
-              pressed && canRegister && styles.ctaPressed,
-            ]}>
+            onPress={handleSendOtp}
+            disabled={!canSendOtp}
+            style={({ pressed }) => [styles.cta, !canSendOtp && styles.ctaDisabled, pressed && canSendOtp && styles.ctaPressed]}>
             <LinearGradient
-              colors={canRegister ? [BRAND.primary, BRAND.primaryDark] : ['#E8C4A0', '#D4A87E']}
+              colors={canSendOtp ? [BRAND.primary, BRAND.primaryDark] : ['#D0D0D0', '#B0B0B0']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.ctaGradient}>
-              <ThemedText style={styles.ctaText}>{t('register')}</ThemedText>
+              <ThemedText style={styles.ctaText}>{t('sendOtp')}</ThemedText>
             </LinearGradient>
           </Pressable>
         </ScrollView>
@@ -258,30 +185,6 @@ const styles = StyleSheet.create({
     width: '100%',
     ...(Platform.OS === 'web' ? ({ outlineWidth: 0, outlineStyle: 'none' } as object) : null),
   },
-  otpRow: {
-    flexDirection: 'row',
-    alignItems: 'stretch',
-    gap: 10,
-  },
-  sendOtpBtn: {
-    borderWidth: 1.5,
-    borderColor: BRAND.primary,
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    minWidth: 110,
-    height: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
-  },
-  sendOtpBtnDisabled: {
-    borderColor: BRAND.border,
-    backgroundColor: '#FAF6EE',
-  },
-  sendOtpText: { color: BRAND.primary, fontWeight: '700', fontSize: 14 },
-  sendOtpTextDisabled: { color: BRAND.textSecondary },
-  inputWrapDisabled: { backgroundColor: '#FAF6EE', borderColor: BRAND.border },
-  inputDisabled: { color: BRAND.textSecondary },
   pressed: { opacity: 0.85 },
   cta: {
     marginTop: Spacing.four,

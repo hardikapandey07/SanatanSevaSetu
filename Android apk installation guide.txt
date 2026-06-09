@@ -1,0 +1,39 @@
+npm install -g eas-cli
+eas login (Hardich07  and Hardich@07)
+eas build:configure
+  
+  
+  1)eas build-platform android --profile preview
+  eas build --platform android --profile preview
+  eas build --platform android --profile production
+
+  if not work than 
+  
+  2) eas build --platform all 
+
+
+  # Build for Android only
+eas build --platform android
+
+# Build for iOS only
+eas build --platform ios
+
+# Build for both
+eas build --platform all
+
+# Build with a specific profile
+eas build --platform android --profile preview
+
+Goal	Command
+Build APK (preview)	eas build --platform android --profile preview
+Build APK (production)	eas build --platform android --profile production
+Build APK (default)	eas build --platform android
+
+
+
+
+cd /d D:\2026\Freelancing\SanatanSevaSetu
+npx expo prebuild --clean -p android
+set GRADLE_USER_HOME=D:\.gradle
+cd android
+gradlew assembleRelease
