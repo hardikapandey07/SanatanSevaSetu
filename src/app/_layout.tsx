@@ -44,6 +44,8 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" />
             <Stack.Screen name="suggestion" />
             <Stack.Screen name="language-settings" />
+            <Stack.Screen name="event-detail" />
+            <Stack.Screen name="webinar-watch" />
             <Stack.Screen name="(tabs)" />
           </Stack>
           {!splashDone && <SplashOverlay onFinish={() => setSplashDone(true)} />}

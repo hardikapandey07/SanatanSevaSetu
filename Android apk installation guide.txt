@@ -37,3 +37,15 @@ npx expo prebuild --clean -p android
 set GRADLE_USER_HOME=D:\.gradle
 cd android
 gradlew assembleRelease
+
+
+
+
+
+Create APP branch
+git checkout main
+git checkout -b APP
+git status
+git add .
+git commit -m "Initial APP branch commit"
+git push -u origin APP
