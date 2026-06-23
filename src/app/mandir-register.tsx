@@ -2,8 +2,9 @@ import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -13,7 +14,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { MessageModal } from '@/components/message-modal';
 import { ThemedText } from '@/components/themed-text';
+import { ApiService, TokenManager, type ExtraField } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
 import { useT } from '@/i18n/LanguageContext';
 
@@ -29,63 +32,116 @@ const BRAND = {
   noteBorder: '#F5D9A8',
   required: '#DC2626',
   inputBorder: '#E5DCC8',
-  chipBg: '#FFF1DE',
-  chipText: '#C95A0E',
 };
-
-const LANGUAGE_OPTIONS = ['Hindi', 'Sanskrit', 'English', 'Gujarati', 'Marathi', 'Tamil', 'Telugu', 'Bengali'];
-const EXPERIENCE_OPTIONS = ['0-5 Years', '5-10 Years', '10-15 Years', '15-20 Years', '20+ Years'];
-const SPECIALITY_OPTIONS = ['Vedic Rituals', 'Wedding Ceremonies', 'Puja & Havan', 'Astrology', 'Katha & Pravachan', 'Yagya Specialist'];
-const REFERENCE_CODES = ['REF-1001', 'REF-1002', 'REF-1003', 'REF-2050', 'REF-3000'];
 
 export default function MandirRegisterScreen() {
   const t = useT();
-  const [languages, setLanguages] = useState<string[]>([]);
-  const [fullName, setFullName] = useState('');
-  const [contact, setContact] = useState('');
-  const [pin, setPin] = useState('');
-  const [experience, setExperience] = useState('');
-  const [speciality, setSpeciality] = useState('');
-  const [association, setAssociation] = useState('');
-  const [refCode, setRefCode] = useState('');
 
-  const canSubmit =
-    languages.length > 0 &&
-    fullName.trim().length > 1 &&
-    contact.length === 10 &&
-    pin.length === 6 &&
-    experience.length > 0 &&
-    speciality.length > 0;
+  const [deities, setDeities] = useState<ExtraField[]>([]);
 
-  const onSubmit = () => {
-    if (!canSubmit) return;
-    router.back();
+  // Required fields
+  const [mandirName, setMandirName] = useState('');
+  const [address, setAddress] = useState('');
+  const [contactPerson, setContactPerson] = useState('');
+  const [contactNo, setContactNo] = useState('');
+  const [email, setEmail] = useState('');
+  const [openingTime, setOpeningTime] = useState('');
+  const [closingTime, setClosingTime] = useState('');
+
+  // Optional fields
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
+  const [pujaCentreName, setPujaCentreName] = useState('');
+  const [chadhavaDetails, setChadhavaDetails] = useState('');
+  const [historyTitle, setHistoryTitle] = useState('');
+  const [historyDescription, setHistoryDescription] = useState('');
+  const [panditNames, setPanditNames] = useState('');
+  const [godIds, setGodIds] = useState<string[]>([]);
+
+  const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalData, setModalData] = useState({ title: '', message: '', type: 'success' as 'success' | 'error' });
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [registeredName, setRegisteredName] = useState('');
+  const [errors, setErrors] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    ApiService.getExtraFields(3).then(setDeities);
+    TokenManager.getUserProfile().then(profile => {
+      if (profile.name) setContactPerson(profile.name);
+      if (profile.mobile) setContactNo(profile.mobile);
+    });
+  }, []);
+
+  const showModal = (title: string, message: string, type: 'success' | 'error') => {
+    setModalData({ title, message, type });
+    setModalVisible(true);
+  };
+
+  const toggleGod = (id: string) => {
+    setGodIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
+  };
+
+  const validate = () => {
+    const e: Record<string, string> = {};
+    if (mandirName.trim().length < 2) e.mandirName = 'Mandir name must be at least 2 characters';
+    if (address.trim().length < 5) e.address = 'Please enter a valid address';
+    if (contactPerson.trim().length < 2) e.contactPerson = 'Contact person name is required';
+    if (contactNo.length !== 10) e.contactNo = 'Contact number must be exactly 10 digits';
+    if (!email.includes('@') || !email.includes('.')) e.email = 'Please enter a valid email address';
+    if (!openingTime.trim()) e.openingTime = 'Opening time is required';
+    if (!closingTime.trim()) e.closingTime = 'Closing time is required';
+    return e;
+  };
+
+  const onSubmit = async () => {
+    const e = validate();
+    if (Object.keys(e).length > 0) { setErrors(e); return; }
+    setErrors({});
+    const panditNamesArr = panditNames.trim()
+      ? panditNames.split(',').map(n => n.trim()).filter(Boolean)
+      : [];
+    setLoading(true);
+    try {
+      const result = await ApiService.registerMandir({
+        mandir_name: mandirName.trim(),
+        address: address.trim(),
+        latitude: latitude ? parseFloat(latitude) : 0,
+        longitude: longitude ? parseFloat(longitude) : 0,
+        opening_time: openingTime.trim(),
+        closing_time: closingTime.trim(),
+        contact_person: contactPerson.trim(),
+        contact_no: contactNo,
+        email_id: email.trim(),
+        puja_centre_name: pujaCentreName.trim(),
+        chadhava_details: chadhavaDetails.trim(),
+        god_ids: godIds,
+        pandit_names: panditNamesArr,
+        history_title: historyTitle.trim(),
+        history_description: historyDescription.trim(),
+      });
+      if (result.success) {
+        setRegisteredName(mandirName.trim());
+        setSuccessModalVisible(true);
+      } else {
+        showModal('Error', result.message, 'error');
+      }
+    } catch {
+      showModal('Error', 'Something went wrong. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <View style={styles.root}>
-      <LinearGradient
-        colors={[BRAND.primary, BRAND.primaryDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 0, y: 1 }}
-        style={styles.header}>
+      <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.header}>
         <SafeAreaView edges={['top']} style={styles.headerInner}>
-          <Pressable
-            onPress={() => router.back()}
-            accessibilityLabel="Back"
-            style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
-            <SymbolView
-              name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }}
-              tintColor="#FFFFFF"
-              size={18}
-            />
+          <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+            <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor="#FFFFFF" size={18} />
           </Pressable>
           <View style={styles.brandLogo}>
-            <Image
-              source={require('@/assets/images/logo.jpg')}
-              style={styles.brandLogoImg}
-              contentFit="contain"
-            />
+            <Image source={require('@/assets/images/logo.jpg')} style={styles.brandLogoImg} contentFit="contain" />
           </View>
           <View style={{ flex: 1 }}>
             <ThemedText style={styles.headerTitle}>{t('mandirRegTitle')}</ThemedText>
@@ -94,94 +150,98 @@ export default function MandirRegisterScreen() {
         </SafeAreaView>
       </LinearGradient>
 
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled">
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
         <View style={styles.card}>
           <ThemedText style={styles.desc}>{t('mandirRegDesc')}</ThemedText>
 
-          <Field label={t('poojaLanguages')} required>
-            <MultiSelect
-              values={languages}
-              placeholder={t('selectLanguages')}
-              options={LANGUAGE_OPTIONS}
-              onChange={setLanguages}
-            />
+          <SectionHeading title="Basic Information" />
+
+          <Field label="Mandir Name" required>
+            <TextInput value={mandirName} onChangeText={v => { setMandirName(v); setErrors(p => ({ ...p, mandirName: '' })); }} placeholder="Enter mandir name" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+            {errors.mandirName ? <ThemedText style={styles.errorText}>{errors.mandirName}</ThemedText> : null}
+          </Field>
+          <Field label="Address" required>
+            <TextInput value={address} onChangeText={v => { setAddress(v); setErrors(p => ({ ...p, address: '' })); }} placeholder="Enter full address" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+            {errors.address ? <ThemedText style={styles.errorText}>{errors.address}</ThemedText> : null}
+          </Field>
+          <Field label="Contact Person" required>
+            <TextInput value={contactPerson} onChangeText={v => { setContactPerson(v); setErrors(p => ({ ...p, contactPerson: '' })); }} placeholder="Enter contact person name" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+            {errors.contactPerson ? <ThemedText style={styles.errorText}>{errors.contactPerson}</ThemedText> : null}
+          </Field>
+          <Field label="Contact Number" required>
+            <TextInput value={contactNo} onChangeText={v => { setContactNo(v.replace(/\D/g, '').slice(0, 10)); setErrors(p => ({ ...p, contactNo: '' })); }} placeholder="Enter 10-digit mobile number" placeholderTextColor={BRAND.textSecondary} inputMode="numeric" keyboardType="number-pad" maxLength={10} style={styles.input} />
+            {errors.contactNo ? <ThemedText style={styles.errorText}>{errors.contactNo}</ThemedText> : null}
+          </Field>
+          <Field label="Email ID" required>
+            <TextInput value={email} onChangeText={v => { setEmail(v); setErrors(p => ({ ...p, email: '' })); }} placeholder="Enter email address" placeholderTextColor={BRAND.textSecondary} inputMode="email" keyboardType="email-address" autoCapitalize="none" style={styles.input} />
+            {errors.email ? <ThemedText style={styles.errorText}>{errors.email}</ThemedText> : null}
           </Field>
 
-          <Field label={t('fullName')} required>
-            <TextInput
-              value={fullName}
-              onChangeText={setFullName}
-              placeholder={t('fullNamePlaceholder')}
-              placeholderTextColor={BRAND.textSecondary}
-              style={styles.input}
-            />
+          <SectionHeading title="Timings" />
+          <Field label="Opening Time" required>
+            <TextInput value={openingTime} onChangeText={v => { setOpeningTime(v); setErrors(p => ({ ...p, openingTime: '' })); }} placeholder="e.g. 05:30:00" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+            {errors.openingTime ? <ThemedText style={styles.errorText}>{errors.openingTime}</ThemedText> : null}
+          </Field>
+          <Field label="Closing Time" required>
+            <TextInput value={closingTime} onChangeText={v => { setClosingTime(v); setErrors(p => ({ ...p, closingTime: '' })); }} placeholder="e.g. 23:30:00" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+            {errors.closingTime ? <ThemedText style={styles.errorText}>{errors.closingTime}</ThemedText> : null}
           </Field>
 
-          <Field label={t('contactNumber')} required>
-            <TextInput
-              value={contact}
-              onChangeText={v => setContact(v.replace(/\D/g, '').slice(0, 10))}
-              placeholder={t('contactNumberPlaceholder')}
-              placeholderTextColor={BRAND.textSecondary}
-              inputMode="numeric"
-              keyboardType="number-pad"
-              maxLength={10}
-              style={styles.input}
-            />
+          <SectionHeading title="Location (Optional)" />
+          <View style={styles.row}>
+            <View style={{ flex: 1 }}>
+              <Field label="Latitude">
+                <TextInput value={latitude} onChangeText={setLatitude} placeholder="e.g. 19.0169" placeholderTextColor={BRAND.textSecondary} inputMode="decimal" keyboardType="decimal-pad" style={styles.input} />
+              </Field>
+            </View>
+            <View style={{ flex: 1 }}>
+              <Field label="Longitude">
+                <TextInput value={longitude} onChangeText={setLongitude} placeholder="e.g. 72.8304" placeholderTextColor={BRAND.textSecondary} inputMode="decimal" keyboardType="decimal-pad" style={styles.input} />
+              </Field>
+            </View>
+          </View>
+
+          <SectionHeading title="Puja Details (Optional)" />
+          <Field label="Puja Centre Name">
+            <TextInput value={pujaCentreName} onChangeText={setPujaCentreName} placeholder="Enter puja centre or hall name" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+          </Field>
+          <Field label="Chadhava Details">
+            <TextInput value={chadhavaDetails} onChangeText={setChadhavaDetails} placeholder="e.g. Naral, phul, prasad" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
+          </Field>
+          <Field label="Pandit Names (comma separated)">
+            <TextInput value={panditNames} onChangeText={setPanditNames} placeholder="e.g. Ramesh, Suresh, Ganesh" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
           </Field>
 
-          <Field label={t('pinCode')} required>
-            <TextInput
-              value={pin}
-              onChangeText={v => setPin(v.replace(/\D/g, '').slice(0, 6))}
-              placeholder={t('pinCodePlaceholder')}
-              placeholderTextColor={BRAND.textSecondary}
-              inputMode="numeric"
-              keyboardType="number-pad"
-              maxLength={6}
-              style={styles.input}
-            />
-          </Field>
+          {/* ── Deities from API extrafields/3 ── */}
+          <SectionHeading title="Deities Worshipped (Optional)" />
+          <ThemedText style={styles.deityHint}>
+            {deities.length === 0 ? 'Loading deities...' : 'Tap to select deities worshipped in this mandir'}
+          </ThemedText>
+          <View style={styles.godsGrid}>
+            {deities.map(deity => {
+              const selected = godIds.includes(deity.id);
+              return (
+                <Pressable
+                  key={deity.id}
+                  onPress={() => toggleGod(deity.id)}
+                  style={({ pressed }) => [styles.godChip, selected && styles.godChipSelected, pressed && styles.pressed]}>
+                  <ThemedText style={[styles.godChipText, selected && styles.godChipTextSelected]}>
+                    {deity.description}
+                  </ThemedText>
+                  {selected && (
+                    <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} tintColor="#FFFFFF" size={12} />
+                  )}
+                </Pressable>
+              );
+            })}
+          </View>
 
-          <Field label={t('experienceYears')} required>
-            <SelectField
-              value={experience}
-              placeholder={t('selectExperience')}
-              options={EXPERIENCE_OPTIONS}
-              onChange={setExperience}
-            />
+          <SectionHeading title="Mandir History (Optional)" />
+          <Field label="History Title">
+            <TextInput value={historyTitle} onChangeText={setHistoryTitle} placeholder="e.g. An ancient Shiva temple" placeholderTextColor={BRAND.textSecondary} style={styles.input} />
           </Field>
-
-          <Field label={t('speciality')} required>
-            <SelectField
-              value={speciality}
-              placeholder={t('selectSpeciality')}
-              options={SPECIALITY_OPTIONS}
-              onChange={setSpeciality}
-            />
-          </Field>
-
-          <Field label={t('mandirAssociation')}>
-            <TextInput
-              value={association}
-              onChangeText={setAssociation}
-              placeholder={t('mandirAssociationPlaceholder')}
-              placeholderTextColor={BRAND.textSecondary}
-              style={styles.input}
-            />
-          </Field>
-
-          <Field label={t('referenceCodeOptional')}>
-            <SearchSelect
-              value={refCode}
-              placeholder={t('searchReferenceCode')}
-              options={REFERENCE_CODES}
-              onChange={setRefCode}
-            />
+          <Field label="History Description">
+            <TextInput value={historyDescription} onChangeText={setHistoryDescription} placeholder="Enter mandir history and description..." placeholderTextColor={BRAND.textSecondary} multiline numberOfLines={4} style={[styles.input, styles.textArea]} />
           </Field>
 
           <View style={styles.noteBox}>
@@ -191,202 +251,55 @@ export default function MandirRegisterScreen() {
 
           <Pressable
             onPress={onSubmit}
-            disabled={!canSubmit}
-            style={({ pressed }) => [
-              styles.submitBtn,
-              !canSubmit && styles.submitBtnDisabled,
-              pressed && canSubmit && styles.pressed,
-            ]}>
-            <ThemedText style={styles.submitText}>{t('submitRegistration')}</ThemedText>
+            style={({ pressed }) => [styles.submitBtn, pressed && styles.pressed]}>
+            <ThemedText style={styles.submitText}>{loading ? 'Submitting...' : t('submitRegistration')}</ThemedText>
           </Pressable>
         </View>
       </ScrollView>
+
+      <MessageModal visible={modalVisible} onClose={() => setModalVisible(false)} title={modalData.title} message={modalData.message} type={modalData.type} />
+
+      <Modal visible={successModalVisible} transparent animationType="fade" onRequestClose={() => setSuccessModalVisible(false)}>
+        <View style={styles.overlay}>
+          <View style={styles.successModal}>
+            <View style={styles.successIconWrap}>
+              <ThemedText style={styles.successEmoji}>🛕</ThemedText>
+            </View>
+            <ThemedText style={styles.successTitle}>Registration Successful!</ThemedText>
+            <ThemedText style={styles.successName}>{registeredName}</ThemedText>
+            <ThemedText style={styles.successMsg}>
+              Your Mandir registration has been submitted successfully. Our team will review and confirm within 2-3 business days.
+            </ThemedText>
+            <Pressable
+              onPress={() => { setSuccessModalVisible(false); router.replace('/(tabs)/home'); }}
+              style={({ pressed }) => [styles.successBtn, pressed && styles.pressed]}>
+              <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.successBtnGradient}>
+                <ThemedText style={styles.successBtnText}>Go to Home</ThemedText>
+              </LinearGradient>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
 
-function Field({
-  label,
-  required,
-  children,
-}: {
-  label: string;
-  required?: boolean;
-  children: React.ReactNode;
-}) {
+function SectionHeading({ title }: { title: string }) {
+  return (
+    <View style={styles.sectionHeadingRow}>
+      <View style={styles.sectionBar} />
+      <ThemedText style={styles.sectionHeading}>{title}</ThemedText>
+    </View>
+  );
+}
+
+function Field({ label, required, children }: { label: string; required?: boolean; children: React.ReactNode }) {
   return (
     <View style={styles.field}>
       <ThemedText style={styles.label}>
-        {label}
-        {required ? <ThemedText style={styles.required}> *</ThemedText> : null}
+        {label}{required ? <ThemedText style={styles.required}> *</ThemedText> : null}
       </ThemedText>
       {children}
-    </View>
-  );
-}
-
-function SelectField({
-  value,
-  placeholder,
-  options,
-  onChange,
-}: {
-  value: string;
-  placeholder: string;
-  options: string[];
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  return (
-    <View>
-      <Pressable
-        onPress={() => setOpen(o => !o)}
-        style={({ pressed }) => [styles.input, styles.selectRow, pressed && styles.pressed]}>
-        <ThemedText style={[styles.selectText, !value && styles.placeholderText]}>
-          {value || placeholder}
-        </ThemedText>
-        <SymbolView
-          name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-          tintColor={BRAND.textSecondary}
-          size={16}
-        />
-      </Pressable>
-      {open ? (
-        <View style={styles.dropdown}>
-          {options.map(opt => (
-            <Pressable
-              key={opt}
-              onPress={() => {
-                onChange(opt);
-                setOpen(false);
-              }}
-              style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}>
-              <ThemedText style={styles.dropdownItemText}>{opt}</ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function MultiSelect({
-  values,
-  placeholder,
-  options,
-  onChange,
-}: {
-  values: string[];
-  placeholder: string;
-  options: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const toggle = (opt: string) => {
-    onChange(values.includes(opt) ? values.filter(v => v !== opt) : [...values, opt]);
-  };
-  return (
-    <View>
-      <Pressable
-        onPress={() => setOpen(o => !o)}
-        style={({ pressed }) => [styles.input, styles.selectRow, pressed && styles.pressed]}>
-        {values.length === 0 ? (
-          <ThemedText style={[styles.selectText, styles.placeholderText]}>{placeholder}</ThemedText>
-        ) : (
-          <View style={styles.chipsRow}>
-            {values.map(v => (
-              <View key={v} style={styles.chip}>
-                <ThemedText style={styles.chipText}>{v}</ThemedText>
-              </View>
-            ))}
-          </View>
-        )}
-        <SymbolView
-          name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-          tintColor={BRAND.textSecondary}
-          size={16}
-        />
-      </Pressable>
-      {open ? (
-        <View style={styles.dropdown}>
-          {options.map(opt => {
-            const selected = values.includes(opt);
-            return (
-              <Pressable
-                key={opt}
-                onPress={() => toggle(opt)}
-                style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}>
-                <ThemedText style={styles.dropdownItemText}>{opt}</ThemedText>
-                {selected ? (
-                  <SymbolView
-                    name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                    tintColor={BRAND.primary}
-                    size={16}
-                  />
-                ) : null}
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function SearchSelect({
-  value,
-  placeholder,
-  options,
-  onChange,
-}: {
-  value: string;
-  placeholder: string;
-  options: string[];
-  onChange: (v: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState('');
-  const filtered = useMemo(
-    () => options.filter(o => o.toLowerCase().includes(query.toLowerCase())),
-    [query, options]
-  );
-  return (
-    <View>
-      <Pressable
-        onPress={() => setOpen(o => !o)}
-        style={({ pressed }) => [styles.input, styles.selectRow, pressed && styles.pressed]}>
-        <ThemedText style={[styles.selectText, !value && styles.placeholderText]}>
-          {value || placeholder}
-        </ThemedText>
-        <SymbolView
-          name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-          tintColor={BRAND.textSecondary}
-          size={16}
-        />
-      </Pressable>
-      {open ? (
-        <View style={styles.dropdown}>
-          <TextInput
-            value={query}
-            onChangeText={setQuery}
-            placeholder={placeholder}
-            placeholderTextColor={BRAND.textSecondary}
-            style={[styles.input, styles.searchInput]}
-          />
-          {filtered.map(opt => (
-            <Pressable
-              key={opt}
-              onPress={() => {
-                onChange(opt);
-                setOpen(false);
-                setQuery('');
-              }}
-              style={({ pressed }) => [styles.dropdownItem, pressed && styles.pressed]}>
-              <ThemedText style={styles.dropdownItemText}>{opt}</ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      ) : null}
     </View>
   );
 }
@@ -394,112 +307,52 @@ function SearchSelect({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: BRAND.bg },
   header: { paddingBottom: Spacing.three },
-  headerInner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: Spacing.three,
-    paddingTop: Spacing.two,
-    gap: 10,
-  },
-  backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  brandLogo: {
-    width: 36,
-    height: 36,
-    borderRadius: 8,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
+  headerInner: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: Spacing.three, paddingTop: Spacing.two, gap: 10 },
+  backBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: 'rgba(255,255,255,0.18)', alignItems: 'center', justifyContent: 'center' },
+  brandLogo: { width: 36, height: 36, borderRadius: 8, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   brandLogoImg: { width: '94%', height: '94%' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
   headerSubtitle: { fontSize: 12, color: '#FFE7CF', marginTop: 2 },
-
   scroll: { flex: 1 },
   scrollContent: { padding: Spacing.three, paddingBottom: Spacing.five },
-  card: {
-    backgroundColor: BRAND.card,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    borderRadius: 14,
-    padding: Spacing.three,
-    gap: Spacing.two,
-  },
+  card: { backgroundColor: BRAND.card, borderWidth: 1, borderColor: BRAND.border, borderRadius: 14, padding: Spacing.three, gap: Spacing.two },
   desc: { fontSize: 13, color: BRAND.textSecondary, marginBottom: Spacing.one },
+  sectionHeadingRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 },
+  sectionBar: { width: 4, height: 16, borderRadius: 2, backgroundColor: BRAND.primary },
+  sectionHeading: { fontSize: 14, fontWeight: '800', color: BRAND.text },
   field: { gap: 6 },
   label: { fontSize: 13, fontWeight: '700', color: BRAND.text },
   required: { color: BRAND.required, fontWeight: '700' },
   input: {
-    borderWidth: 1,
-    borderColor: BRAND.inputBorder,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: BRAND.text,
+    borderWidth: 1, borderColor: BRAND.inputBorder, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 12, fontSize: 14, color: BRAND.text,
     backgroundColor: '#FFFFFF',
     ...(Platform.OS === 'web' ? ({ outlineWidth: 0, outlineStyle: 'none' } as object) : null),
   },
-  searchInput: { margin: 6 },
-  selectRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 6,
-  },
-  selectText: { fontSize: 14, color: BRAND.text, flexShrink: 1 },
-  placeholderText: { color: BRAND.textSecondary },
-  chipsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, flexShrink: 1 },
-  chip: {
-    backgroundColor: BRAND.chipBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  chipText: { color: BRAND.chipText, fontSize: 12, fontWeight: '700' },
-  dropdown: {
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: BRAND.inputBorder,
-    borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    overflow: 'hidden',
-  },
-  dropdownItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: BRAND.border,
-  },
-  dropdownItemText: { fontSize: 14, color: BRAND.text },
-  noteBox: {
-    backgroundColor: BRAND.noteBg,
-    borderWidth: 1,
-    borderColor: BRAND.noteBorder,
-    borderRadius: 10,
-    padding: 12,
-    gap: 4,
-  },
+  textArea: { height: 100, textAlignVertical: 'top' },
+  row: { flexDirection: 'row', gap: 12 },
+  deityHint: { fontSize: 12, color: BRAND.textSecondary, marginTop: -4 },
+  godsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  godChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, borderWidth: 1.5, borderColor: BRAND.border, backgroundColor: '#FAFAF8' },
+  godChipSelected: { backgroundColor: BRAND.primary, borderColor: BRAND.primary },
+  godChipText: { fontSize: 13, fontWeight: '600', color: BRAND.text },
+  godChipTextSelected: { color: '#FFFFFF' },
+  noteBox: { backgroundColor: BRAND.noteBg, borderWidth: 1, borderColor: BRAND.noteBorder, borderRadius: 10, padding: 12, gap: 4 },
   noteLabel: { fontSize: 12, fontWeight: '800', color: BRAND.primaryDark },
   noteText: { fontSize: 12, color: BRAND.text, lineHeight: 18 },
-  submitBtn: {
-    backgroundColor: BRAND.primary,
-    borderRadius: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: Spacing.one,
-  },
+  submitBtn: { backgroundColor: BRAND.primary, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: Spacing.one },
+  errorText: { fontSize: 12, color: '#DC2626', marginTop: 3 },
   submitBtnDisabled: { opacity: 0.5 },
   submitText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   pressed: { opacity: 0.85 },
+  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
+  successModal: { backgroundColor: '#FFFFFF', borderRadius: 20, padding: 28, alignItems: 'center', width: '100%', maxWidth: 340, gap: 10 },
+  successIconWrap: { width: 72, height: 72, borderRadius: 36, backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center', marginBottom: 4 },
+  successEmoji: { fontSize: 36 },
+  successTitle: { fontSize: 20, fontWeight: '800', color: BRAND.text, textAlign: 'center' },
+  successName: { fontSize: 16, fontWeight: '700', color: BRAND.primary, textAlign: 'center' },
+  successMsg: { fontSize: 13, color: BRAND.textSecondary, textAlign: 'center', lineHeight: 19 },
+  successBtn: { borderRadius: 12, overflow: 'hidden', marginTop: 6, width: '100%' },
+  successBtnGradient: { paddingVertical: 14, alignItems: 'center' },
+  successBtnText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
 });

@@ -1,11 +1,13 @@
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
+import { TokenManager } from '@/constants/api';
 import { useT } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/translations';
 
@@ -45,7 +47,7 @@ const SAVED_TEMPLES: SavedTemple[] = [
 
 type MenuRow = { labelKey: TranslationKey; icon: { ios: string; android: string; web: string }; value?: string; route?: string };
 const MENU: MenuRow[] = [
-  { labelKey: 'referralCode',      icon: { ios: 'gift.fill',            android: 'card_giftcard', web: 'card_giftcard' }, value: 'SETU2026' },
+  { labelKey: 'rewardAndReferral',  icon: { ios: 'gift.fill',            android: 'card_giftcard', web: 'card_giftcard' }, route: '/reward-referral' },
   { labelKey: 'languageSettings',  icon: { ios: 'character.bubble',     android: 'translate',     web: 'translate' } },
   { labelKey: 'suggestions',       icon: { ios: 'bubble.left.fill',     android: 'chat',          web: 'chat' }, route: '/suggestion' },
   { labelKey: 'notifications',     icon: { ios: 'bell.fill',            android: 'notifications', web: 'notifications' }, route: '/notifications' },
@@ -53,6 +55,19 @@ const MENU: MenuRow[] = [
 
 export default function ProfileScreen() {
   const t = useT();
+  const [userName, setUserName] = useState('');
+  const [userMobile, setUserMobile] = useState('');
+
+  useEffect(() => {
+    TokenManager.getUserProfile().then(profile => {
+      if (profile.name) setUserName(profile.name);
+      if (profile.mobile) setUserMobile(profile.mobile);
+    });
+  }, []);
+
+  const displayName = userName || t('profileName');
+  const displayMobile = userMobile ? `+91 ${userMobile.slice(0, 5)} ${userMobile.slice(5)}` : t('profilePhone');
+  const avatarLetter = displayName.charAt(0).toUpperCase();
 
   return (
     <View style={styles.root}>
@@ -75,12 +90,11 @@ export default function ProfileScreen() {
           {/* Avatar + info */}
           <View style={styles.profileRow}>
             <View style={styles.avatar}>
-              <ThemedText style={styles.avatarText}>R</ThemedText>
+              <ThemedText style={styles.avatarText}>{avatarLetter}</ThemedText>
             </View>
             <View style={{ flex: 1 }}>
-              <ThemedText style={styles.profileName}>{t('profileName')}</ThemedText>
-              <ThemedText style={styles.profileMeta}>{t('profilePhone')}</ThemedText>
-              <ThemedText style={styles.profileMeta}>rajesh.kumar@email.com</ThemedText>
+              <ThemedText style={styles.profileName}>{displayName}</ThemedText>
+              <ThemedText style={styles.profileMeta}>{displayMobile}</ThemedText>
               <View style={styles.ratingRow}>
                 <ThemedText style={styles.starEmoji}>⭐</ThemedText>
                 <ThemedText style={styles.ratingText}>4.9 · {t('devoteeSince')}</ThemedText>
@@ -152,6 +166,7 @@ export default function ProfileScreen() {
               key={row.labelKey}
               onPress={() => {
                 if (row.labelKey === 'languageSettings') router.push('/language-settings');
+                else if (row.labelKey === 'rewardAndReferral') router.push('/reward-referral');
                 else if (row.route) router.push(row.route as never);
               }}
               style={({ pressed }) => [
@@ -175,7 +190,10 @@ export default function ProfileScreen() {
 
         {/* Logout */}
         <Pressable
-          onPress={() => router.replace('/')}
+          onPress={async () => {
+            await TokenManager.clearToken();
+            router.replace('/');
+          }}
           style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressed]}>
           <SymbolView
             name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}

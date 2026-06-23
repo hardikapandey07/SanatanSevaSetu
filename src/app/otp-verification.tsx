@@ -7,7 +7,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { SymbolView } from 'expo-symbols';
 
 import { ThemedText } from '@/components/themed-text';
+import { MessageModal } from '@/components/message-modal';
 import { Spacing } from '@/constants/theme';
+import { ApiService } from '@/constants/api';
 import { useT } from '@/i18n/LanguageContext';
 
 const BRAND = {
@@ -27,13 +29,30 @@ const RESEND_SECONDS = 30;
 export default function OtpVerificationScreen() {
   const t = useT();
   const params = useLocalSearchParams();
-  const mobileNumber = (params.mobile as string) || '9253536663';
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const mobileNumber = (params.mobile as string) || '';
+  const userName = (params.name as string) || '';
+  const referralCode = (params.referral as string) || null;
+  const isLogin = params.mode === 'login';
+  
+  const [otp, setOtp] = useState(['', '', '', '']);
   const [remaining, setRemaining] = useState(RESEND_SECONDS);
   const [agreed, setAgreed] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalData, setModalData] = useState({
+    title: '',
+    message: '',
+    type: 'success' as 'success' | 'error',
+  });
+  
   const otpInputRefs = useRef<(TextInput | null)[]>([]);
   const otpValue = otp.join('');
-  const canVerify = otpValue.length === 6 && agreed;
+  const canVerify = otpValue.length === 4 && agreed && !loading;
+
+  const showModal = (title: string, message: string, type: 'success' | 'error') => {
+    setModalData({ title, message, type });
+    setModalVisible(true);
+  };
 
   useEffect(() => {
     if (remaining <= 0) return;
@@ -48,7 +67,7 @@ export default function OtpVerificationScreen() {
     setOtp(newOtp);
 
     // Auto-move to next field when digit is entered
-    if (numValue && index < 5) {
+    if (numValue && index < 3) {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
@@ -61,13 +80,33 @@ export default function OtpVerificationScreen() {
 
   const handleResendOtp = () => {
     setRemaining(RESEND_SECONDS);
-    setOtp(['', '', '', '', '', '']);
+    setOtp(['', '', '', '']);
     otpInputRefs.current[0]?.focus();
   };
 
-  const handleVerify = () => {
+  const handleVerify = async () => {
     if (!canVerify) return;
-    router.replace('/(tabs)/home');
+
+    setLoading(true);
+    try {
+      const result = isLogin
+        ? await ApiService.signInOtp(mobileNumber, otpValue)
+        : await ApiService.verifyOtp(mobileNumber, otpValue, userName, referralCode);
+
+      if (result.success) {
+        showModal('Success', result.message, 'success');
+        setTimeout(() => {
+          setModalVisible(false);
+          router.replace('/(tabs)/home');
+        }, 2000);
+      } else {
+        showModal('Error', result.message, 'error');
+      }
+    } catch {
+      showModal('Error', 'Something went wrong. Please try again.', 'error');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const maskedPhone = `+91 ${mobileNumber.slice(0, 5)} ${mobileNumber.slice(5)}`;
@@ -81,7 +120,7 @@ export default function OtpVerificationScreen() {
         <View style={styles.header}>
           <View style={styles.logoWrap}>
             <Image
-              source={require('@/assets/images/logo.jpg')}
+              source={require('@/assets/images/logo1.jpg')}
               style={styles.logo}
               contentFit="contain"
             />
@@ -105,9 +144,6 @@ export default function OtpVerificationScreen() {
           </View>
           <View style={styles.otpInfo}>
             <ThemedText style={styles.otpSentText}>{t('otpSentTo')} {maskedPhone}</ThemedText>
-            <Pressable>
-              <ThemedText style={styles.changeNumberLink}>{t('changeNumber')}</ThemedText>
-            </Pressable>
           </View>
         </View>
 
@@ -172,13 +208,27 @@ export default function OtpVerificationScreen() {
             !canVerify && styles.verifyBtnDisabled,
             pressed && canVerify && styles.verifyBtnPressed,
           ]}>
-          <ThemedText style={styles.verifyBtnText}>
-            {t('verifyContinue')} <ThemedText style={styles.arrow}>→</ThemedText>
-          </ThemedText>
+          <LinearGradient
+            colors={canVerify ? [BRAND.primary, BRAND.primaryDark] : ['#D0D0D0', '#B0B0B0']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.verifyBtnGradient}>
+            <ThemedText style={styles.verifyBtnText}>
+              {loading ? 'Verifying...' : `${t('verifyContinue')} →`}
+            </ThemedText>
+          </LinearGradient>
         </Pressable>
 
         <ThemedText style={styles.sanskritFooter}>{t('sanskritFooter')}</ThemedText>
       </ScrollView>
+      
+      <MessageModal
+        visible={modalVisible}
+        onClose={() => setModalVisible(false)}
+        title={modalData.title}
+        message={modalData.message}
+        type={modalData.type}
+      />
     </View>
   );
 }
@@ -287,13 +337,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: 'hidden',
     marginBottom: Spacing.three,
-    backgroundColor: BRAND.buttonBg,
+  },
+  verifyBtnDisabled: { opacity: 0.95 },
+  verifyBtnPressed: { opacity: 0.9 },
+  verifyBtnGradient: {
     paddingVertical: 16,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  verifyBtnDisabled: { opacity: 0.5 },
-  verifyBtnPressed: { opacity: 0.85 },
   verifyBtnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '700', textAlign: 'center' },
   arrow: { marginLeft: 8 },
   sanskritFooter: {

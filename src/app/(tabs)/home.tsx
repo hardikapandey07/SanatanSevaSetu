@@ -112,10 +112,17 @@ export default function HomeScreen() {
   const menuBtnRef = useRef<View>(null);
 
   const openMenu = () => {
-    menuBtnRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
-      setDropdownPos({ top: pageY + height + 4, right: Dimensions.get('window').width - pageX - width });
+    if (Platform.OS === 'web') {
+      // On web, use a simpler positioning approach
+      setDropdownPos({ top: 0, right: 0 }); // Will be positioned via CSS
       setMenuOpen(true);
-    });
+    } else {
+      // On mobile, use measure for precise positioning
+      menuBtnRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
+        setDropdownPos({ top: pageY + height + 4, right: Dimensions.get('window').width - pageX - width });
+        setMenuOpen(true);
+      });
+    }
   };
 
   const DROPDOWN_ITEMS: DropdownItem[] = [
@@ -328,7 +335,12 @@ export default function HomeScreen() {
         />
       )}
       {menuOpen && dropdownPos && (
-        <View style={[styles.dropdownMenu, { top: dropdownPos.top, right: dropdownPos.right }]}>
+        <View style={[
+          styles.dropdownMenu, 
+          Platform.OS === 'web' 
+            ? styles.dropdownMenuWeb 
+            : { top: dropdownPos.top, right: dropdownPos.right }
+        ]}>
           {DROPDOWN_ITEMS.map((item, i) => (
             <Pressable
               key={item.labelKey}
@@ -498,6 +510,10 @@ const styles = StyleSheet.create({
     elevation: 999,
     minWidth: 220,
     zIndex: 9999,
+  },
+  dropdownMenuWeb: {
+    top: Platform.OS === 'web' ? 70 : undefined, // Position below header on web
+    right: Platform.OS === 'web' ? 16 : undefined, // Align to right edge like mobile
   },
   dropdownItem: {
     flexDirection: 'row', alignItems: 'center', gap: 12,

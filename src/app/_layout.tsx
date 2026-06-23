@@ -1,33 +1,49 @@
-import { Stack, ThemeProvider, DarkTheme, DefaultTheme } from 'expo-router';
-import * as ExpoSplashScreen from 'expo-splash-screen';
-import { useCallback, useEffect, useState } from 'react';
-import { useColorScheme, View } from 'react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from "expo-router";
+import * as ExpoSplashScreen from "expo-splash-screen";
+import { useCallback, useEffect, useState } from "react";
+import { useColorScheme, View } from "react-native";
 
-import { SplashOverlay } from '@/components/splash-overlay';
-import { LanguageProvider } from '@/i18n/LanguageContext';
+import { SplashOverlay } from "@/components/splash-overlay";
+import { TokenManager } from "@/constants/api";
+import { LanguageProvider } from "@/i18n/LanguageContext";
 
-// Keep the native splash visible until our JS splash has mounted.
+// Keep the native splash visible until our JS splash takes over.
 ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
+
+function AuthRedirect({ splashDone }: { splashDone: boolean }) {
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!splashDone) return;
+    TokenManager.isLoggedIn().then(loggedIn => {
+      if (loggedIn) router.replace('/(tabs)/home');
+    });
+  }, [splashDone]);
+
+  return null;
+}
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [splashDone, setSplashDone] = useState(false);
 
-  const onLayoutReady = useCallback(() => {
-    // First frame is ready — hand off from native splash to the JS splash overlay.
+  const handleSplashFinish = useCallback(() => {
     ExpoSplashScreen.hideAsync().catch(() => {});
+    setSplashDone(true);
   }, []);
-
-  useEffect(() => {
-    onLayoutReady();
-  }, [onLayoutReady]);
 
   return (
     <LanguageProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-        <View style={{ flex: 1 }}>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <View
+          style={{ flex: 1, width: "100%", maxWidth: 800, alignSelf: "center" }}
+        >
           <Stack
-            screenOptions={{ headerShown: false, contentStyle: { backgroundColor: '#FFFFFF' } }}>
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: "#FFFFFF" },
+            }}
+          >
             <Stack.Screen name="index" />
             <Stack.Screen name="register" />
             <Stack.Screen name="otp-verification" />
@@ -44,11 +60,15 @@ export default function RootLayout() {
             <Stack.Screen name="notifications" />
             <Stack.Screen name="suggestion" />
             <Stack.Screen name="language-settings" />
+            <Stack.Screen name="reward-referral" />
             <Stack.Screen name="event-detail" />
             <Stack.Screen name="webinar-watch" />
             <Stack.Screen name="(tabs)" />
           </Stack>
-          {!splashDone && <SplashOverlay onFinish={() => setSplashDone(true)} />}
+          <AuthRedirect splashDone={splashDone} />
+          {!splashDone && (
+            <SplashOverlay onFinish={handleSplashFinish} />
+          )}
         </View>
       </ThemeProvider>
     </LanguageProvider>

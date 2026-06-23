@@ -51,7 +51,7 @@ export default function LanguageScreen() {
           keyboardShouldPersistTaps="handled">
           <View style={styles.logoWrap}>
             <Image
-              source={require('@/assets/images/logo.jpg')}
+              source={require('@/assets/images/logo1.jpg')}
               style={styles.logo}
               contentFit="contain"
               transition={200}

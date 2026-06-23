@@ -47,6 +47,8 @@ export default function BookPoojaScreen() {
   const [step, setStep] = useState(1);
   const [service, setService] = useState<TranslationKey>('satyanarayanPuja');
   const [date, setDate] = useState('');
+  const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
   const [time, setTime] = useState('');
   const [pandit, setPandit] = useState<TranslationKey | ''>('');
 
@@ -54,6 +56,133 @@ export default function BookPoojaScreen() {
     (step === 1 && !!service) ||
     (step === 2 && !!date && !!time) ||
     (step === 3 && !!pandit);
+
+  const formatDate = (date: Date) => {
+    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+  };
+
+  const formatDisplayDate = (date: Date) => {
+    return date.toLocaleDateString('en-IN', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  };
+
+  const onDateChange = (event: any, selectedDate?: Date) => {
+    if (Platform.OS === 'android') {
+      setShowDatePicker(false);
+    }
+    if (selectedDate) {
+      setSelectedDate(selectedDate);
+      setDate(formatDate(selectedDate));
+    }
+  };
+
+  const generateDateOptions = () => {
+    const options = [];
+    const today = new Date();
+    
+    // Today
+    options.push({
+      label: 'Today',
+      dateText: today.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+      date: today
+    });
+    
+    // Tomorrow
+    const tomorrow = new Date(today);
+    tomorrow.setDate(today.getDate() + 1);
+    options.push({
+      label: 'Tomorrow',
+      dateText: tomorrow.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+      date: tomorrow
+    });
+    
+    // Next 5 days
+    for (let i = 2; i <= 6; i++) {
+      const futureDate = new Date(today);
+      futureDate.setDate(today.getDate() + i);
+      options.push({
+        label: futureDate.toLocaleDateString('en-IN', { weekday: 'short' }),
+        dateText: futureDate.toLocaleDateString('en-IN', { month: 'short', day: 'numeric' }),
+        date: futureDate
+      });
+    }
+    
+    return options;
+  };
+  
+  const selectDateOption = (dateOption: { label: string; dateText: string; date: Date }) => {
+    setSelectedDate(dateOption.date);
+    setDate(formatDate(dateOption.date));
+    setShowDatePicker(false);
+  };
+
+  // Calendar functionality
+  const [currentCalendarDate, setCurrentCalendarDate] = useState(new Date());
+  
+  const getDaysInMonth = (date: Date) => {
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    const daysInMonth = lastDay.getDate();
+    const startingDayOfWeek = firstDay.getDay();
+    
+    const days = [];
+    
+    // Add empty cells for days before month starts
+    for (let i = 0; i < startingDayOfWeek; i++) {
+      days.push(null);
+    }
+    
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(new Date(year, month, day));
+    }
+    
+    return days;
+  };
+  
+  const goToPreviousMonth = () => {
+    setCurrentCalendarDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() - 1);
+      return newDate;
+    });
+  };
+  
+  const goToNextMonth = () => {
+    setCurrentCalendarDate(prev => {
+      const newDate = new Date(prev);
+      newDate.setMonth(prev.getMonth() + 1);
+      return newDate;
+    });
+  };
+  
+  const selectCalendarDate = (calendarDate: Date) => {
+    setSelectedDate(calendarDate);
+    setDate(formatDate(calendarDate));
+    setShowDatePicker(false);
+  };
+  
+  const isDateDisabled = (calendarDate: Date) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    calendarDate.setHours(0, 0, 0, 0);
+    return calendarDate < today;
+  };
+  
+  const isDateSelected = (calendarDate: Date) => {
+    if (!date) return false;
+    return formatDate(calendarDate) === date;
+  };
+
+  const openDatePicker = () => {
+    setShowDatePicker(true);
+  };
 
   const onNext = () => {
     if (!canProceed) return;
@@ -136,13 +265,131 @@ export default function BookPoojaScreen() {
                 />
                 <ThemedText style={styles.dateLabel}>{t('selectDate')}</ThemedText>
               </View>
-              <TextInput
-                value={date}
-                onChangeText={setDate}
-                placeholder="YYYY-MM-DD"
-                placeholderTextColor={BRAND.textSecondary}
-                style={styles.input}
-              />
+              
+              <Pressable
+                onPress={openDatePicker}
+                style={({ pressed }) => [styles.dateSelector, pressed && styles.pressed]}>
+                <SymbolView
+                  name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }}
+                  tintColor={date ? BRAND.primary : BRAND.textSecondary}
+                  size={16}
+                />
+                <ThemedText style={[styles.dateSelectorText, !date && styles.placeholderText]}>
+                  {date ? formatDisplayDate(selectedDate) : 'Select Date'}
+                </ThemedText>
+                <SymbolView
+                  name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
+                  tintColor={BRAND.textSecondary}
+                  size={16}
+                />
+              </Pressable>
+              
+              {showDatePicker && (
+                <View style={styles.datePickerContainer}>
+                  {/* Quick Date Options */}
+                  <View style={styles.quickDateSection}>
+                    <ThemedText style={styles.quickDateTitle}>Quick Select</ThemedText>
+                    <View style={styles.datePickerGrid}>
+                      {generateDateOptions().slice(0, 4).map((dateOption, index) => (
+                        <Pressable
+                          key={index}
+                          onPress={() => selectDateOption(dateOption)}
+                          style={({ pressed }) => [
+                            styles.dateOption,
+                            date === formatDate(dateOption.date) && styles.dateOptionSelected,
+                            pressed && styles.pressed,
+                          ]}>
+                          <ThemedText style={[styles.dateOptionText, date === formatDate(dateOption.date) && styles.dateOptionTextSelected]}>
+                            {dateOption.label}
+                          </ThemedText>
+                          <ThemedText style={[styles.dateOptionDate, date === formatDate(dateOption.date) && styles.dateOptionDateSelected]}>
+                            {dateOption.dateText}
+                          </ThemedText>
+                        </Pressable>
+                      ))}
+                    </View>
+                  </View>
+                  
+                  {/* Calendar */}
+                  <View style={styles.calendarSection}>
+                    <ThemedText style={styles.calendarTitle}>Select Date</ThemedText>
+                    
+                    {/* Calendar Header */}
+                    <View style={styles.calendarHeader}>
+                      <Pressable
+                        onPress={goToPreviousMonth}
+                        style={({ pressed }) => [styles.calendarNavBtn, pressed && styles.pressed]}>
+                        <SymbolView
+                          name={{ ios: 'chevron.left', android: 'chevron_left', web: 'chevron_left' }}
+                          tintColor={BRAND.primary}
+                          size={18}
+                        />
+                      </Pressable>
+                      
+                      <ThemedText style={styles.calendarMonthYear}>
+                        {currentCalendarDate.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })}
+                      </ThemedText>
+                      
+                      <Pressable
+                        onPress={goToNextMonth}
+                        style={({ pressed }) => [styles.calendarNavBtn, pressed && styles.pressed]}>
+                        <SymbolView
+                          name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                          tintColor={BRAND.primary}
+                          size={18}
+                        />
+                      </Pressable>
+                    </View>
+                    
+                    {/* Days of Week Header */}
+                    <View style={styles.calendarDaysHeader}>
+                      {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                        <ThemedText key={day} style={styles.calendarDayHeaderText}>{day}</ThemedText>
+                      ))}
+                    </View>
+                    
+                    {/* Calendar Grid */}
+                    <View style={styles.calendarGrid}>
+                      {getDaysInMonth(currentCalendarDate).map((calendarDate, index) => {
+                        if (!calendarDate) {
+                          return <View key={`empty-${index}`} style={styles.calendarEmptyDay} />;
+                        }
+                        
+                        const disabled = isDateDisabled(calendarDate);
+                        const selected = isDateSelected(calendarDate);
+                        
+                        return (
+                          <Pressable
+                            key={index}
+                            onPress={() => !disabled && selectCalendarDate(calendarDate)}
+                            disabled={disabled}
+                            style={({ pressed }) => [
+                              styles.calendarDay,
+                              selected && styles.calendarDaySelected,
+                              disabled && styles.calendarDayDisabled,
+                              pressed && !disabled && styles.pressed,
+                            ]}>
+                            <ThemedText style={[
+                              styles.calendarDayText,
+                              selected && styles.calendarDayTextSelected,
+                              disabled && styles.calendarDayTextDisabled,
+                            ]}>
+                              {calendarDate.getDate()}
+                            </ThemedText>
+                          </Pressable>
+                        );
+                      })}
+                    </View>
+                  </View>
+                  
+                  <Pressable
+                    onPress={() => setShowDatePicker(false)}
+                    style={({ pressed }) => [styles.closeDatePicker, pressed && styles.pressed]}>
+                    <ThemedText style={styles.closeDatePickerText}>Close</ThemedText>
+                  </Pressable>
+                </View>
+              )}
+              
               <ThemedText style={styles.sectionSubtitle}>{t('chooseTime')}</ThemedText>
               <View style={styles.timeGrid}>
                 {TIMES.map(tm => (
@@ -233,33 +480,30 @@ function Stepper({ current, labels }: { current: number; labels: string[] }) {
       <View style={styles.stepperRow}>
         {[1, 2, 3, 4].map((n, i) => (
           <View key={n} style={styles.stepperItem}>
-            <View style={[styles.stepCircle, n <= current ? styles.stepCircleActive : styles.stepCircleInactive]}>
-              {n < current ? (
-                <SymbolView
-                  name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                  tintColor="#FFFFFF"
-                  size={12}
-                />
-              ) : (
-                <ThemedText style={[styles.stepNum, n <= current ? styles.stepNumActive : styles.stepNumInactive]}>
-                  {n}
-                </ThemedText>
-              )}
+            <View style={styles.stepColumn}>
+              <View style={[styles.stepCircle, n <= current ? styles.stepCircleActive : styles.stepCircleInactive]}>
+                {n < current ? (
+                  <SymbolView
+                    name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                    tintColor="#FFFFFF"
+                    size={12}
+                  />
+                ) : (
+                  <ThemedText style={[styles.stepNum, n <= current ? styles.stepNumActive : styles.stepNumInactive]}>
+                    {n}
+                  </ThemedText>
+                )}
+              </View>
+              <ThemedText
+                style={[styles.stepLabel, n === current && styles.stepLabelActive]}
+                numberOfLines={2}>
+                {labels[i] || ''}
+              </ThemedText>
             </View>
             {i < 3 && (
               <View style={[styles.stepLine, n < current ? styles.stepLineActive : styles.stepLineInactive]} />
             )}
           </View>
-        ))}
-      </View>
-      <View style={styles.stepLabelsRow}>
-        {labels.map((label, i) => (
-          <ThemedText
-            key={label}
-            style={[styles.stepLabel, i + 1 === current && styles.stepLabelActive]}
-            numberOfLines={1}>
-            {label}
-          </ThemedText>
         ))}
       </View>
     </View>
@@ -289,25 +533,26 @@ const styles = StyleSheet.create({
   scrollContent: { padding: Spacing.three, paddingBottom: Spacing.five, gap: Spacing.three },
 
   stepperWrap: { gap: 8 },
-  stepperRow: { flexDirection: 'row', alignItems: 'center' },
-  stepperItem: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  stepperRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  stepperItem: { flexDirection: 'row', alignItems: 'flex-start', flex: 1 },
+  stepColumn: { alignItems: 'center', flex: 1 },
   stepCircle: {
     width: 28,
     height: 28,
     borderRadius: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: 6,
   },
   stepCircleActive: { backgroundColor: BRAND.primary },
   stepCircleInactive: { backgroundColor: '#E0D6C2' },
   stepNum: { fontSize: 12, fontWeight: '800' },
   stepNumActive: { color: '#FFFFFF' },
   stepNumInactive: { color: BRAND.textSecondary },
-  stepLine: { flex: 1, height: 2, marginHorizontal: 2 },
+  stepLine: { flex: 1, height: 2, marginHorizontal: 4, marginTop: 14 },
   stepLineActive: { backgroundColor: BRAND.primary },
   stepLineInactive: { backgroundColor: '#E0D6C2' },
-  stepLabelsRow: { flexDirection: 'row', justifyContent: 'space-between' },
-  stepLabel: { fontSize: 9, color: BRAND.textSecondary, flex: 1, textAlign: 'center' },
+  stepLabel: { fontSize: 10, color: BRAND.textSecondary, textAlign: 'center', lineHeight: 12 },
   stepLabelActive: { color: BRAND.primary, fontWeight: '700' },
 
   card: {
@@ -340,6 +585,153 @@ const styles = StyleSheet.create({
 
   dateLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dateLabel: { fontSize: 13, fontWeight: '600', color: BRAND.primary },
+  dateSelector: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BRAND.inputBorder,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    height: 44,
+    backgroundColor: '#FFFFFF',
+    gap: 8,
+  },
+  dateSelectorText: { flex: 1, fontSize: 14, color: BRAND.text },
+  placeholderText: { color: BRAND.textSecondary },
+  datePickerContainer: {
+    backgroundColor: BRAND.card,
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    borderRadius: 12,
+    padding: 16,
+    marginTop: 8,
+  },
+  quickDateSection: {
+    marginBottom: 20,
+  },
+  quickDateTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BRAND.text,
+    marginBottom: 10,
+  },
+  datePickerGrid: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+  dateOption: {
+    flex: 1,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: BRAND.inputBorder,
+    borderRadius: 8,
+    paddingVertical: 8,
+    backgroundColor: '#FFFFFF',
+  },
+  dateOptionSelected: {
+    borderColor: BRAND.primary,
+    backgroundColor: BRAND.selectedBg,
+  },
+  dateOptionText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: BRAND.text,
+  },
+  dateOptionTextSelected: {
+    color: BRAND.primary,
+  },
+  dateOptionDate: {
+    fontSize: 10,
+    color: BRAND.textSecondary,
+    marginTop: 1,
+  },
+  dateOptionDateSelected: {
+    color: BRAND.primary,
+  },
+  calendarSection: {
+    marginBottom: 16,
+  },
+  calendarTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: BRAND.text,
+    marginBottom: 12,
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  calendarNavBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: BRAND.selectedBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  calendarMonthYear: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: BRAND.text,
+  },
+  calendarDaysHeader: {
+    flexDirection: 'row',
+    marginBottom: 8,
+  },
+  calendarDayHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    color: BRAND.textSecondary,
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  calendarEmptyDay: {
+    width: '14.28%',
+    height: 36,
+  },
+  calendarDay: {
+    width: '14.28%',
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 18,
+  },
+  calendarDaySelected: {
+    backgroundColor: BRAND.primary,
+  },
+  calendarDayDisabled: {
+    opacity: 0.3,
+  },
+  calendarDayText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: BRAND.text,
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+  },
+  calendarDayTextDisabled: {
+    color: BRAND.textSecondary,
+  },
+  closeDatePicker: {
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderTopWidth: 1,
+    borderTopColor: BRAND.border,
+    marginTop: 8,
+    paddingTop: 16,
+  },
+  closeDatePickerText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: BRAND.textSecondary,
+  },
   input: {
     borderWidth: 1,
     borderColor: BRAND.inputBorder,

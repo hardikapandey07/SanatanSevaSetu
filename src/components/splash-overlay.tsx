@@ -53,7 +53,7 @@ export function SplashOverlay({ duration = 2000, onFinish }: Props) {
       <Animated.View style={[styles.content, { opacity: fade }]}>
         <View style={styles.logoWrap}>
           <Image
-            source={require('@/assets/images/logo.jpg')}
+            source={require('@/assets/images/logo1.jpg')}
             style={styles.logo}
             contentFit="contain"
           />
