@@ -1,3 +1,4 @@
+import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
@@ -57,6 +58,25 @@ export default function MandirRegisterScreen() {
   const [historyDescription, setHistoryDescription] = useState('');
   const [panditNames, setPanditNames] = useState('');
   const [godIds, setGodIds] = useState<string[]>([]);
+  const [showOtherDeity, setShowOtherDeity] = useState(false);
+  const [otherDeities, setOtherDeities] = useState<string[]>(['']);
+
+  const [mandirImage, setMandirImage] = useState<string | null>(null);
+
+  const pickMandirImage = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showModal('Permission Required', 'Please allow access to your photo library.', 'error');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images'],
+      allowsEditing: true,
+      aspect: [16, 9],
+      quality: 0.8,
+    });
+    if (!result.canceled && result.assets[0]) setMandirImage(result.assets[0].uri);
+  };
 
   const [loading, setLoading] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
@@ -80,6 +100,16 @@ export default function MandirRegisterScreen() {
 
   const toggleGod = (id: string) => {
     setGodIds(prev => prev.includes(id) ? prev.filter(g => g !== id) : [...prev, id]);
+  };
+
+  const addOtherDeityRow = () => setOtherDeities(prev => [...prev, '']);
+  const updateOtherDeity = (index: number, value: string) =>
+    setOtherDeities(prev => prev.map((v, i) => i === index ? value : v));
+  const removeOtherDeity = (index: number) =>
+    setOtherDeities(prev => prev.length === 1 ? [''] : prev.filter((_, i) => i !== index));
+  const toggleOtherDeity = () => {
+    setShowOtherDeity(p => !p);
+    if (showOtherDeity) setOtherDeities(['']);
   };
 
   const validate = () => {
@@ -234,7 +264,56 @@ export default function MandirRegisterScreen() {
                 </Pressable>
               );
             })}
+
+            {/* Other chip */}
+            <Pressable
+              onPress={toggleOtherDeity}
+              style={({ pressed }) => [styles.godChip, showOtherDeity && styles.godChipSelected, pressed && styles.pressed]}>
+              <ThemedText style={[styles.godChipText, showOtherDeity && styles.godChipTextSelected]}>
+                Other
+              </ThemedText>
+              {showOtherDeity && (
+                <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} tintColor="#FFFFFF" size={12} />
+              )}
+            </Pressable>
           </View>
+
+          {/* Other deities input rows */}
+          {showOtherDeity && (
+            <View style={styles.otherDeityBox}>
+              <ThemedText style={styles.otherDeityLabel}>Add Other Deities</ThemedText>
+              {otherDeities.map((val, index) => (
+                <View key={index} style={styles.otherDeityRow}>
+                  <TextInput
+                    value={val}
+                    onChangeText={text => updateOtherDeity(index, text)}
+                    placeholder={`Deity name ${index + 1}`}
+                    placeholderTextColor={BRAND.textSecondary}
+                    style={[styles.input, { flex: 1 }]}
+                  />
+                  <Pressable
+                    onPress={() => removeOtherDeity(index)}
+                    style={({ pressed }) => [styles.otherDeityRemove, pressed && styles.pressed]}>
+                    <SymbolView
+                      name={{ ios: 'minus.circle.fill', android: 'remove_circle', web: 'remove_circle' }}
+                      tintColor="#DC2626"
+                      size={20}
+                    />
+                  </Pressable>
+                </View>
+              ))}
+              <Pressable
+                onPress={addOtherDeityRow}
+                style={({ pressed }) => [styles.addMoreBtn, pressed && styles.pressed]}>
+                <SymbolView
+                  name={{ ios: 'plus.circle.fill', android: 'add_circle', web: 'add_circle' }}
+                  tintColor={BRAND.primary}
+                  size={18}
+                />
+                <ThemedText style={styles.addMoreText}>Add Another Deity</ThemedText>
+              </Pressable>
+            </View>
+          )}
 
           <SectionHeading title="Mandir History (Optional)" />
           <Field label="History Title">
@@ -243,6 +322,21 @@ export default function MandirRegisterScreen() {
           <Field label="History Description">
             <TextInput value={historyDescription} onChangeText={setHistoryDescription} placeholder="Enter mandir history and description..." placeholderTextColor={BRAND.textSecondary} multiline numberOfLines={4} style={[styles.input, styles.textArea]} />
           </Field>
+
+          {/* ── Mandir Image — last field, same UploadRow design as pandit-register ── */}
+          <View style={styles.docsSection}>
+            <ThemedText style={styles.docsSectionTitle}>Mandir / Temple Image <ThemedText style={styles.optionalTag}>(Optional)</ThemedText></ThemedText>
+            <ThemedText style={styles.docsSectionSubtitle}>Upload a photo of the mandir for display</ThemedText>
+            <UploadRow
+              icon={{ ios: 'photo.on.rectangle', android: 'add_photo_alternate', web: 'add_photo_alternate' }}
+              label="Add Mandir / Temple Image"
+              subtitle="JPG or PNG · Recommended 16:9"
+              fileName={mandirImage ? 'Image selected ✓' : null}
+              previewUri={mandirImage}
+              onPress={pickMandirImage}
+              onRemove={() => setMandirImage(null)}
+            />
+          </View>
 
           <View style={styles.noteBox}>
             <ThemedText style={styles.noteLabel}>{t('panditRegNoteLabel')}</ThemedText>
@@ -280,6 +374,42 @@ export default function MandirRegisterScreen() {
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function UploadRow({ icon, label, subtitle, fileName, previewUri, onPress, onRemove }: {
+  icon: { ios: string; android: string; web: string };
+  label: string; subtitle: string; fileName: string | null;
+  previewUri?: string | null; onPress: () => void; onRemove: () => void;
+}) {
+  return (
+    <View style={styles.uploadRow}>
+      <View style={styles.uploadIconBg}>
+        <SymbolView name={icon} tintColor={BRAND.primary} size={20} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <ThemedText style={styles.uploadLabel}>{label}</ThemedText>
+        <ThemedText style={styles.uploadSubtitle}>{subtitle}</ThemedText>
+        {fileName ? (
+          <View style={styles.uploadedRow}>
+            {previewUri
+              ? <Image source={{ uri: previewUri }} style={styles.previewThumb} contentFit="cover" />
+              : <SymbolView name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }} tintColor="#16A34A" size={14} />
+            }
+            <ThemedText style={styles.uploadedName} numberOfLines={1}>{fileName}</ThemedText>
+          </View>
+        ) : null}
+      </View>
+      {fileName ? (
+        <Pressable onPress={onRemove} style={({ pressed }) => [styles.removeBtn, pressed && styles.pressed]}>
+          <SymbolView name={{ ios: 'xmark.circle.fill', android: 'cancel', web: 'cancel' }} tintColor="#DC2626" size={20} />
+        </Pressable>
+      ) : (
+        <Pressable onPress={onPress} style={({ pressed }) => [styles.browseBtn, pressed && styles.pressed]}>
+          <ThemedText style={styles.browseBtnText}>Browse</ThemedText>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -337,6 +467,39 @@ const styles = StyleSheet.create({
   godChipSelected: { backgroundColor: BRAND.primary, borderColor: BRAND.primary },
   godChipText: { fontSize: 13, fontWeight: '600', color: BRAND.text },
   godChipTextSelected: { color: '#FFFFFF' },
+  otherDeityBox: {
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    borderRadius: 12,
+    backgroundColor: '#FAFAF8',
+    padding: 12,
+    gap: 10,
+  },
+  otherDeityLabel: { fontSize: 13, fontWeight: '700', color: BRAND.text },
+  otherDeityRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  otherDeityRemove: { padding: 2 },
+  addMoreBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    paddingVertical: 4,
+  },
+  addMoreText: { fontSize: 13, fontWeight: '700', color: BRAND.primary },
+  docsSection: { gap: 10, marginTop: 4 },
+  docsSectionTitle: { fontSize: 14, fontWeight: '800', color: BRAND.text },
+  optionalTag: { fontSize: 12, fontWeight: '500', color: BRAND.textSecondary },
+  docsSectionSubtitle: { fontSize: 12, color: BRAND.textSecondary, marginTop: -4 },
+  uploadRow: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: '#FAFAF8', borderWidth: 1, borderColor: BRAND.border, borderRadius: 12, padding: 12 },
+  uploadIconBg: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center' },
+  uploadLabel: { fontSize: 13, fontWeight: '700', color: BRAND.text },
+  uploadSubtitle: { fontSize: 11, color: BRAND.textSecondary, marginTop: 2 },
+  uploadedRow: { flexDirection: 'row', alignItems: 'center', gap: 5, marginTop: 4 },
+  uploadedName: { fontSize: 11, color: '#16A34A', fontWeight: '600', flex: 1 },
+  previewThumb: { width: 24, height: 24, borderRadius: 4 },
+  browseBtn: { backgroundColor: BRAND.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 8 },
+  browseBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '700' },
+  removeBtn: { padding: 2 },
   noteBox: { backgroundColor: BRAND.noteBg, borderWidth: 1, borderColor: BRAND.noteBorder, borderRadius: 10, padding: 12, gap: 4 },
   noteLabel: { fontSize: 12, fontWeight: '800', color: BRAND.primaryDark },
   noteText: { fontSize: 12, color: BRAND.text, lineHeight: 18 },

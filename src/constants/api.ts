@@ -8,6 +8,8 @@ export const STORAGE_KEYS = {
   LOGIN_TIMESTAMP: 'login_timestamp',
   USER_NAME: 'user_name',
   USER_MOBILE: 'user_mobile',
+  USER_ID: 'user_id',
+  USER_PROFILE_ID: 'user_profile_id',
 };
 
 const SESSION_DURATION_MS = 6 * 30 * 24 * 60 * 60 * 1000;
@@ -18,6 +20,7 @@ export const API_CONFIG = {
     SEND_OTP: '/api/v1/auth/general/send-otp',
     VERIFY_OTP: '/api/v1/auth/general/verify-otp',
     SIGNIN_OTP: '/api/v1/auth/general/signin-otp',
+    GET_USER: '/api/v1/auth/general/user',  // append /{mobile_number}
     REGISTER_PANDIT: '/api/v1/pandits/register',
     REGISTER_MANDIR: '/api/v1/mandirs/register',
     GET_EXTRAFIELDS: '/api/v1/extrafields',
@@ -38,6 +41,8 @@ export type VerifyOtpErrorResponse = { detail: string };
 export type SignInOtpRequest = { mobile_number: string; otp_code: string };
 export type SignInOtpSuccessResponse = { access_token: string; token_type: string; message: string };
 export type SignInOtpErrorResponse = { detail: string };
+
+export type UserData = { id: string; user_id: string; name: string; mobile_number: string };
 
 export type ExtraField = { id: string; description: string };
 
@@ -100,11 +105,27 @@ export class TokenManager {
     } catch (error) { console.error('Error storing token:', error); }
   }
 
-  static async getUserProfile(): Promise<{ name: string; mobile: string }> {
+  static async storeUserData(user: UserData) {
     try {
-      const [[, name], [, mobile]] = await AsyncStorage.multiGet([STORAGE_KEYS.USER_NAME, STORAGE_KEYS.USER_MOBILE]);
-      return { name: name ?? '', mobile: mobile ?? '' };
-    } catch { return { name: '', mobile: '' }; }
+      await AsyncStorage.multiSet([
+        [STORAGE_KEYS.USER_PROFILE_ID, user.id],
+        [STORAGE_KEYS.USER_ID, user.user_id],
+        [STORAGE_KEYS.USER_NAME, user.name],
+        [STORAGE_KEYS.USER_MOBILE, user.mobile_number],
+      ]);
+    } catch (error) { console.error('Error storing user data:', error); }
+  }
+
+  static async getUserProfile(): Promise<{ id: string; user_id: string; name: string; mobile: string }> {
+    try {
+      const [[, id], [, user_id], [, name], [, mobile]] = await AsyncStorage.multiGet([
+        STORAGE_KEYS.USER_PROFILE_ID,
+        STORAGE_KEYS.USER_ID,
+        STORAGE_KEYS.USER_NAME,
+        STORAGE_KEYS.USER_MOBILE,
+      ]);
+      return { id: id ?? '', user_id: user_id ?? '', name: name ?? '', mobile: mobile ?? '' };
+    } catch { return { id: '', user_id: '', name: '', mobile: '' }; }
   }
 
   static async getToken(): Promise<string | null> {
@@ -121,7 +142,11 @@ export class TokenManager {
 
   static async clearToken() {
     try {
-      await AsyncStorage.multiRemove([STORAGE_KEYS.ACCESS_TOKEN, STORAGE_KEYS.TOKEN_TYPE, STORAGE_KEYS.USER_DATA, STORAGE_KEYS.LOGIN_TIMESTAMP, STORAGE_KEYS.USER_NAME, STORAGE_KEYS.USER_MOBILE]);
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.ACCESS_TOKEN, STORAGE_KEYS.TOKEN_TYPE, STORAGE_KEYS.USER_DATA,
+        STORAGE_KEYS.LOGIN_TIMESTAMP, STORAGE_KEYS.USER_NAME, STORAGE_KEYS.USER_MOBILE,
+        STORAGE_KEYS.USER_ID, STORAGE_KEYS.USER_PROFILE_ID,
+      ]);
     } catch (error) { console.error('Error clearing token:', error); }
   }
 
@@ -140,6 +165,21 @@ export class TokenManager {
 export class ApiService {
   private static baseUrl = API_CONFIG.BASE_URL;
   static setBaseUrl(url: string) { this.baseUrl = url; }
+
+  static async getUser(mobileNumber: string): Promise<{ success: boolean; data?: UserData }> {
+    try {
+      const headers = await TokenManager.getAuthHeaders();
+      const response = await fetch(`${this.baseUrl}${API_CONFIG.ENDPOINTS.GET_USER}/${mobileNumber}`, {
+        method: 'GET', headers,
+      });
+      if (response.ok) {
+        const data = await response.json() as UserData;
+        await TokenManager.storeUserData(data);
+        return { success: true, data };
+      }
+      return { success: false };
+    } catch { return { success: false }; }
+  }
 
   static async sendOtp(mobileNumber: string): Promise<{ success: boolean; message: string }> {
     try {

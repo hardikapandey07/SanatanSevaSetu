@@ -4,7 +4,9 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState } from 'react';
 import {
+  Animated,
   Dimensions,
+  Modal,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Platform,
@@ -104,12 +106,31 @@ const EVENTS: EventItem[] = [
   { titleKey: 'eventKathaSession',     date: 'May 10, 2026', time: '7:00 PM' },
 ];
 
+const SIDE_MENU_ITEMS = [
+  { icon: { ios: 'building.columns.fill', android: 'account_balance',  web: 'account_balance'  }, label: 'Mandir Search',     route: '/temple-search'     },
+  { icon: { ios: 'person.fill',           android: 'person',           web: 'person'           }, label: 'Pandit Search',     route: '/pandit-search'     },
+  { icon: { ios: 'heart.fill',            android: 'favorite',         web: 'favorite'         }, label: 'Healing Agent',     route: '/healing'           },
+  { icon: { ios: 'book.fill',             android: 'menu_book',        web: 'menu_book'        }, label: 'Sanskrit Learning', route: '/sanskrit-learning' },
+] as const;
+
 export default function HomeScreen() {
   const t = useT();
   const [search, setSearch] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
+  const [sideMenuOpen, setSideMenuOpen] = useState(false);
+  const slideAnim = useState(() => new Animated.Value(-280))[0];
   const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
   const menuBtnRef = useRef<View>(null);
+
+  const openSideMenu = () => {
+    setSideMenuOpen(true);
+    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+  };
+  const closeSideMenu = () => {
+    Animated.timing(slideAnim, { toValue: -280, useNativeDriver: true, duration: 220 }).start(
+      () => setSideMenuOpen(false)
+    );
+  };
 
   const openMenu = () => {
     if (Platform.OS === 'web') {
@@ -140,8 +161,15 @@ export default function HomeScreen() {
         style={styles.header}>
         <SafeAreaView edges={['top']} style={styles.headerInner}>
           <View style={styles.headerTop}>
-            {/* Left: logo + welcome text */}
+            {/* Left: 3-dot menu + logo + welcome text */}
             <View style={styles.brandRow}>
+              <Pressable onPress={openSideMenu} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+                <SymbolView
+                  name={{ ios: 'ellipsis', android: 'more_vert', web: 'more_vert' }}
+                  tintColor="#FFFFFF"
+                  size={20}
+                />
+              </Pressable>
               <View style={styles.brandLogo}>
                 <Image
                   source={require('@/assets/images/logo.jpg')}
@@ -326,6 +354,51 @@ export default function HomeScreen() {
           ))}
         </View>
       </ScrollView>
+
+      {/* ── Side Menu Modal ── */}
+      <Modal visible={sideMenuOpen} transparent animationType="none" onRequestClose={closeSideMenu} statusBarTranslucent>
+        <View style={{ flex: 1 }}>
+          <Pressable style={styles.sideMenuBackdrop} onPress={closeSideMenu} />
+          <Animated.View style={[styles.sideMenu, { transform: [{ translateX: slideAnim }] }]}>
+            {/* Header */}
+            <LinearGradient
+              colors={[BRAND.primary, BRAND.primaryDark]}
+              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
+              style={styles.sideMenuHeader}>
+              <View style={styles.sideMenuLogo}>
+                <Image source={require('@/assets/images/logo.jpg')} style={{ width: '94%', height: '94%' }} contentFit="contain" />
+              </View>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.sideMenuBrand}>Sanatan Seva Setu</ThemedText>
+                <ThemedText style={styles.sideMenuTagline}>Bridging Devotion</ThemedText>
+              </View>
+              <Pressable onPress={closeSideMenu} style={({ pressed }) => [styles.sideMenuClose, pressed && styles.pressed]}>
+                <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor="#FFFFFF" size={18} />
+              </Pressable>
+            </LinearGradient>
+
+            {/* Items */}
+            <ScrollView showsVerticalScrollIndicator={false}>
+              {SIDE_MENU_ITEMS.map((item, i) => (
+                <Pressable
+                  key={item.label}
+                  onPress={() => { closeSideMenu(); setTimeout(() => router.push(item.route as never), 250); }}
+                  style={({ pressed }) => [
+                    styles.sideMenuItem,
+                    i > 0 && styles.sideMenuItemDivider,
+                    pressed && styles.sideMenuItemPressed,
+                  ]}>
+                  <View style={styles.sideMenuIconBg}>
+                    <SymbolView name={item.icon} tintColor={BRAND.primary} size={18} />
+                  </View>
+                  <ThemedText style={styles.sideMenuItemLabel}>{item.label}</ThemedText>
+                  <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor={BRAND.textSecondary} size={14} />
+                </Pressable>
+              ))}
+            </ScrollView>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* ── Dropdown overlay — rendered last so it sits on top of everything ── */}
       {menuOpen && (
@@ -697,4 +770,47 @@ const styles = StyleSheet.create({
   },
   blogTag: { fontSize: 10, fontWeight: '700', color: BRAND.primary },
   blogTitle: { fontSize: 13, fontWeight: '700', color: BRAND.text },
+
+  sideMenuBackdrop: {
+    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+  },
+  sideMenu: {
+    position: 'absolute', top: 0, left: 0, bottom: 0,
+    width: 280,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 4, height: 0 },
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  sideMenuHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 18,
+  },
+  sideMenuLogo: {
+    width: 40, height: 40, borderRadius: 10,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  sideMenuBrand: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
+  sideMenuTagline: { fontSize: 11, color: '#FFE7CF', marginTop: 1 },
+  sideMenuClose: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sideMenuItem: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingHorizontal: 18, paddingVertical: 16,
+  },
+  sideMenuItemDivider: { borderTopWidth: 1, borderTopColor: BRAND.border },
+  sideMenuItemPressed: { backgroundColor: '#FFF8F0' },
+  sideMenuIconBg: {
+    width: 38, height: 38, borderRadius: 10,
+    backgroundColor: '#FFF1DE',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  sideMenuItemLabel: { flex: 1, fontSize: 15, fontWeight: '700', color: BRAND.text },
 });

@@ -65,9 +65,9 @@ export default function ProfileScreen() {
     });
   }, []);
 
-  const displayName = userName || t('profileName');
-  const displayMobile = userMobile ? `+91 ${userMobile.slice(0, 5)} ${userMobile.slice(5)}` : t('profilePhone');
-  const avatarLetter = displayName.charAt(0).toUpperCase();
+  const displayName = userName || 'NA';
+  const displayMobile = userMobile ? `+91 ${userMobile.slice(0, 5)} ${userMobile.slice(5)}` : 'NA';
+  const avatarLetter = userName ? userName.charAt(0).toUpperCase() : '?';
 
   return (
     <View style={styles.root}>

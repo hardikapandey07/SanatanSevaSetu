@@ -94,6 +94,8 @@ export default function OtpVerificationScreen() {
         : await ApiService.verifyOtp(mobileNumber, otpValue, userName, referralCode);
 
       if (result.success) {
+        // Fetch and store full user profile from server
+        await ApiService.getUser(mobileNumber);
         showModal('Success', result.message, 'success');
         setTimeout(() => {
           setModalVisible(false);
