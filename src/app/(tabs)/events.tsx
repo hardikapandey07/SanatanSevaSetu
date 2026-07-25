@@ -1,12 +1,15 @@
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { ApiService, type Event } from '@/constants/api';
+import { getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
+import { useLanguage, useT, useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -17,237 +20,211 @@ const BRAND = {
   text: '#1F1A14',
   textSecondary: '#6B6258',
   chipBg: '#EDE3D2',
-  liveBg: '#DC2626',
 };
 
-type Category = 'All' | 'Festival' | 'Katha' | 'Aarti' | 'Webinar' | 'More';
-const CATEGORIES: Category[] = ['All', 'Festival', 'Katha', 'Aarti', 'Webinar'];
+type Filter = 'All' | 'Free' | 'Paid' | 'Online' | 'Offline';
 
-type EventItem = {
-  id: string;
-  title: string;
-  category: Category;
-  price: string | 'FREE';
-  isLive?: boolean;
-  emoji: string;
-  bg: string;
-  // Webinar-only fields
-  date?: string;
-  location?: string;
-  going?: string;
-};
-
-const EVENTS: EventItem[] = [
-  {
-    id: '1',
-    title: 'Ganesh Chaturthi Mahotsav 2025',
-    category: 'Festival',
-    price: 'FREE',
-    emoji: '🐘',
-    bg: '#F0EAE0',
-  },
-  {
-    id: '2',
-    title: 'Om Namah Shivaya Chanting',
-    category: 'Katha',
-    price: '₹2,499',
-    emoji: '🙏',
-    bg: '#C9D8E8',
-  },
-  {
-    id: '3',
-    title: 'Live Sound Healing Session',
-    category: 'Aarti',
-    price: 'FREE',
-    isLive: true,
-    emoji: '🎵',
-    bg: '#1A1A1A',
-  },
-  {
-    id: '4',
-    title: 'Independence Day Special Aarti',
-    category: 'Aarti',
-    price: '₹499',
-    emoji: '🇮🇳',
-    bg: '#1E7FBF',
-  },
-  {
-    id: '5',
-    title: 'Gita Saar Webinar Series',
-    category: 'Webinar',
-    price: 'FREE',
-    isLive: true,
-    emoji: '☕',
-    bg: '#1A1A1A',
-    date: 'Oct 2, 2025',
-    location: 'Online',
-    going: '1,240 going',
-  },
-  {
-    id: '6',
-    title: 'Sunderkand Katha Live',
-    category: 'Katha',
-    price: '₹999',
-    isLive: true,
-    emoji: '🪔',
-    bg: '#7A1F18',
-  },
-  {
-    id: '7',
-    title: 'Vedic Astrology Webinar',
-    category: 'Webinar',
-    price: '₹499',
-    emoji: '⭐',
-    bg: '#1E3A5F',
-    date: 'Oct 10, 2025',
-    location: 'Online',
-    going: '860 going',
-  },
+const FILTERS: { key: Filter; emoji: string }[] = [
+  { key: 'All',     emoji: '🙏' },
+  { key: 'Free',    emoji: '🎁' },
+  { key: 'Paid',    emoji: '💰' },
+  { key: 'Online',  emoji: '💻' },
+  { key: 'Offline', emoji: '📍' },
 ];
+
+const FALLBACK_COLORS = ['#7A1F18', '#1A3A5F', '#134E4A', '#4A1D96', '#7A3B1E'];
 
 export default function EventsScreen() {
   const t = useT();
-  const [activeCategory, setActiveCategory] = useState<Category>('All');
+  const { lang } = useLanguage();
+  const [events, setEvents] = useState<Event[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filter, setFilter] = useState<Filter>('All');
 
-  const filtered =
-    activeCategory === 'All'
-      ? EVENTS
-      : EVENTS.filter(e => e.category === activeCategory);
+  useEffect(() => {
+    setLoading(true);
+    ApiService.getUpcomingEvents().then(data => {
+      setEvents(data);
+      setLoading(false);
+    });
+  }, [lang]);
+
+  const filtered = events.filter(e => {
+    if (filter === 'Free')    return !e.is_paid;
+    if (filter === 'Paid')    return e.is_paid;
+    if (filter === 'Online')  return e.is_online;
+    if (filter === 'Offline') return !e.is_online;
+    return true;
+  });
 
   return (
     <View style={styles.root}>
       {/* Header */}
       <LinearGradient
         colors={[BRAND.primary, BRAND.primaryDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 0 }}
+        start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
         style={styles.header}>
         <SafeAreaView edges={['top']} style={styles.headerInner}>
-          <ThemedText style={styles.headerTitle}>Spiritual Events</ThemedText>
-          <ThemedText style={styles.headerSubtitle}>Festivals, kathas, webinars & more</ThemedText>
+          <ThemedText style={styles.headerTitle}>{t('eventsTitle')}</ThemedText>
+          <ThemedText style={styles.headerSubtitle}>{t('eventsSubtitle')}</ThemedText>
         </SafeAreaView>
       </LinearGradient>
 
-      {/* Category filter chips */}
+      {/* Filter chips */}
       <View style={styles.chipRow}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.chipScroll}>
-          {CATEGORIES.map(cat => (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+          {FILTERS.map(f => (
             <Pressable
-              key={cat}
-              onPress={() => setActiveCategory(cat)}
+              key={f.key}
+              onPress={() => setFilter(f.key)}
               style={({ pressed }) => [
                 styles.chip,
-                activeCategory === cat && styles.chipActive,
+                filter === f.key && styles.chipActive,
                 pressed && styles.pressed,
               ]}>
-              <ThemedText
-                style={[
-                  styles.chipText,
-                  activeCategory === cat && styles.chipTextActive,
-                ]}>
-                {cat}
+              <ThemedText style={styles.chipEmoji}>{f.emoji}</ThemedText>
+              <ThemedText style={[styles.chipText, filter === f.key && styles.chipTextActive]}>
+                {f.key}
               </ThemedText>
             </Pressable>
           ))}
         </ScrollView>
       </View>
 
-      {/* Event list */}
-      <ScrollView
-        style={styles.scroll}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        {filtered.map(ev => (
-          <EventCard key={ev.id} event={ev} />
-        ))}
-      </ScrollView>
+      {loading ? (
+        <ActivityIndicator size="large" color={BRAND.primary} style={{ marginTop: 40 }} />
+      ) : (
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}>
+          {filtered.length === 0 ? (
+            <View style={styles.emptyWrap}>
+              <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
+              <ThemedText style={styles.emptyText}>No events found</ThemedText>
+            </View>
+          ) : (
+            filtered.map((ev, i) => (
+              <EventCard key={ev.id} event={ev} colorIndex={i} />
+            ))
+          )}
+        </ScrollView>
+      )}
     </View>
   );
 }
 
-function EventCard({ event }: { event: EventItem }) {
-  if (event.category === 'Webinar') {
-    return <WebinarCard event={event} />;
-  }
+function EventCard({ event, colorIndex }: { event: Event; colorIndex: number }) {
+  const t = useT();
+  const [eventName, venueName, description] = useTranslatedBatch([
+    event.event_name,
+    event.venue_name,
+    event.description,
+  ]);
+  const imageUri = event.mobile_image_url
+    ? `${getApiBaseUrl()}/${event.mobile_image_url}`
+    : null;
+  const fallbackBg = FALLBACK_COLORS[colorIndex % FALLBACK_COLORS.length];
+
+  const formatDate = (date: string) => {
+    try {
+      return new Date(date).toLocaleDateString('en-IN', {
+        day: 'numeric', month: 'short', year: 'numeric',
+      });
+    } catch { return date; }
+  };
+
+  const formatTime = (time: string) => {
+    try {
+      const [h, m] = time.split(':').map(Number);
+      const d = new Date(); d.setHours(h, m);
+      return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch { return time; }
+  };
+
+  const priceLabel = event.is_paid && event.amount != null
+    ? `₹${event.amount.toLocaleString()}`
+    : 'FREE';
+
+  const onPress = () => router.push({
+    pathname: '/event-detail',
+    params: {
+      id: event.id,
+      title: event.event_name,
+      subtitle: event.venue_name,
+      description: event.description,
+      date: `${formatDate(event.start_date)} – ${formatDate(event.end_date)}`,
+      time: `${formatTime(event.start_time)} – ${formatTime(event.end_time)}`,
+      location: event.venue_name,
+      price: priceLabel,
+      isOnline: String(event.is_online),
+      status: event.status,
+      imageUri: imageUri ?? '',
+    },
+  });
+
   return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/event-detail', params: { id: event.id } })}
-      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
-      <View style={[styles.cardImg, { backgroundColor: event.bg }]}>
-        <ThemedText style={styles.cardEmoji}>{event.emoji}</ThemedText>
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+      {/* Image */}
+      <View style={[styles.cardImg, { backgroundColor: fallbackBg }]}>
+        {imageUri ? (
+          <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        ) : (
+          <ThemedText style={styles.cardEmoji}>🎉</ThemedText>
+        )}
+
+        {/* Status badge */}
+        {event.status === 'SCHEDULED' && (
+          <View style={styles.statusBadge}>
+            <ThemedText style={styles.statusText}>📅 Scheduled</ThemedText>
+          </View>
+        )}
+
+        {/* Price badge */}
+        <View style={[styles.priceBadge, !event.is_paid && styles.priceBadgeFree]}>
+          <ThemedText style={styles.priceText}>{priceLabel}</ThemedText>
+        </View>
+
+        {/* Online/Offline pill */}
+        <View style={styles.modePill}>
+          <ThemedText style={styles.modePillText}>
+            {event.is_online ? '💻 Online' : '📍 In-Person'}
+          </ThemedText>
+        </View>
+
+        {/* Title overlay */}
         <View style={styles.cardOverlay}>
-          <ThemedText style={styles.cardTitle} numberOfLines={1}>{event.title}</ThemedText>
-        </View>
-        {event.isLive && (
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <ThemedText style={styles.liveText}>LIVE</ThemedText>
-          </View>
-        )}
-        <View style={[styles.priceBadge, event.price === 'FREE' && styles.priceBadgeFree]}>
-          <ThemedText style={styles.priceText}>{event.price}</ThemedText>
-        </View>
-      </View>
-    </Pressable>
-  );
-}
-
-function WebinarCard({ event }: { event: EventItem }) {
-  return (
-    <Pressable
-      onPress={() => router.push({ pathname: '/event-detail', params: { id: event.id } })}
-      style={({ pressed }) => [styles.webinarCard, pressed && styles.pressed]}>
-      {/* Image block */}
-      <View style={[styles.webinarImg, { backgroundColor: event.bg }]}>
-        <ThemedText style={styles.webinarEmoji}>{event.emoji}</ThemedText>
-        {event.isLive && (
-          <View style={styles.liveBadge}>
-            <View style={styles.liveDot} />
-            <ThemedText style={styles.liveText}>LIVE</ThemedText>
-          </View>
-        )}
-        <View style={[styles.priceBadge, event.price === 'FREE' && styles.priceBadgeFree]}>
-          <ThemedText style={styles.priceText}>{event.price}</ThemedText>
-        </View>
-      </View>
-
-      {/* Card body */}
-      <View style={styles.webinarBody}>
-        <View style={styles.webinarTitleRow}>
-          <ThemedText style={styles.webinarTitle} numberOfLines={1}>{event.title}</ThemedText>
-          <View style={styles.webinarCatPill}>
-            <ThemedText style={styles.webinarCatText}>Webinar</ThemedText>
-          </View>
-        </View>
-        {event.date && (
-          <View style={styles.webinarMetaRow}>
-            <ThemedText style={styles.webinarMetaIcon}>📅</ThemedText>
-            <ThemedText style={styles.webinarMeta}>{event.date}</ThemedText>
-          </View>
-        )}
-        {event.location && (
-          <View style={styles.webinarMetaRow}>
-            <ThemedText style={styles.webinarMetaIcon}>📍</ThemedText>
-            <ThemedText style={styles.webinarMeta}>{event.location}</ThemedText>
-          </View>
-        )}
-        <View style={styles.webinarFooter}>
-          {event.going && (
-            <View style={styles.webinarGoingRow}>
-              <ThemedText style={styles.webinarMetaIcon}>👥</ThemedText>
-              <ThemedText style={styles.webinarMeta}>{event.going}</ThemedText>
-            </View>
+          <ThemedText style={styles.cardTitle} numberOfLines={2}>{eventName}</ThemedText>
+          {!!venueName && (
+            <ThemedText style={styles.cardSubtitle} numberOfLines={1}>📍 {venueName}</ThemedText>
           )}
-          <Pressable
-            onPress={() => router.push({ pathname: '/webinar-watch', params: { id: event.id } })}
-            style={({ pressed }) => [styles.watchBtn, pressed && styles.pressed]}>
-            <ThemedText style={styles.watchBtnText}>Watch</ThemedText>
-          </Pressable>
         </View>
       </View>
+
+      {/* Meta */}
+      <View style={styles.cardMeta}>
+        <View style={styles.metaItem}>
+          <ThemedText style={styles.metaIcon}>📅</ThemedText>
+          <ThemedText style={styles.metaText}>
+            {formatDate(event.start_date)}
+            {event.start_date !== event.end_date ? ` – ${formatDate(event.end_date)}` : ''}
+          </ThemedText>
+        </View>
+        <View style={styles.metaItem}>
+          <ThemedText style={styles.metaIcon}>🕐</ThemedText>
+          <ThemedText style={styles.metaText}>{formatTime(event.start_time)}</ThemedText>
+        </View>
+        <Pressable onPress={onPress} style={styles.viewDetailBtn}>
+          <ThemedText style={styles.viewDetailText}>{t('viewDetails')} ›</ThemedText>
+        </Pressable>
+      </View>
+
+      {/* Description */}
+      {!!description && (
+        <View style={styles.descRow}>
+          <ThemedText style={styles.descText} numberOfLines={2}>{description}</ThemedText>
+        </View>
+      )}
     </Pressable>
   );
 }
@@ -260,122 +237,84 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 22, fontWeight: '800', color: '#FFFFFF' },
   headerSubtitle: { fontSize: 13, color: 'rgba(255,255,255,0.85)' },
 
-  chipRow: {
-    backgroundColor: BRAND.bg,
-    paddingVertical: 12,
-  },
+  chipRow: { backgroundColor: BRAND.bg, paddingVertical: 12 },
   chipScroll: { paddingHorizontal: Spacing.three, gap: 8 },
   chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 7,
-    borderRadius: 999,
-    backgroundColor: BRAND.chipBg,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 14, paddingVertical: 8,
+    borderRadius: 999, backgroundColor: BRAND.chipBg,
   },
   chipActive: { backgroundColor: BRAND.primary },
+  chipEmoji: { fontSize: 13 },
   chipText: { fontSize: 13, fontWeight: '600', color: BRAND.text },
   chipTextActive: { color: '#FFFFFF' },
 
   scroll: { flex: 1 },
-  scrollContent: {
-    paddingHorizontal: Spacing.three,
-    paddingBottom: Spacing.five,
-    gap: 12,
-  },
+  scrollContent: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.five, gap: 14 },
 
-  card: { borderRadius: 14, overflow: 'hidden' },
-  cardImg: {
-    height: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    position: 'relative',
-  },
-  cardEmoji: { fontSize: 40, opacity: 0.35 },
+  emptyWrap: { alignItems: 'center', paddingTop: 60, gap: 12 },
+  emptyEmoji: { fontSize: 48 },
+  emptyText: { fontSize: 15, color: BRAND.textSecondary, fontWeight: '600' },
 
-  cardOverlay: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  cardTitle: { fontSize: 14, fontWeight: '700', color: '#FFFFFF' },
-
-  // Webinar card
-  webinarCard: {
+  card: {
     backgroundColor: BRAND.card,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: BRAND.border,
+    borderRadius: 16,
+    borderWidth: 1, borderColor: BRAND.border,
     overflow: 'hidden',
   },
-  webinarImg: {
-    height: 160,
+  cardImg: {
+    height: 200,
     justifyContent: 'center',
     alignItems: 'center',
     position: 'relative',
   },
-  webinarEmoji: { fontSize: 50, opacity: 0.3 },
-  webinarBody: { padding: Spacing.three, gap: 6 },
-  webinarTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  webinarTitle: { flex: 1, fontSize: 15, fontWeight: '800', color: BRAND.text },
-  webinarCatPill: {
-    backgroundColor: '#FFF1DE',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  webinarCatText: { fontSize: 11, fontWeight: '700', color: BRAND.primary },
-  webinarMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  webinarMetaIcon: { fontSize: 12 },
-  webinarMeta: { fontSize: 13, color: BRAND.textSecondary },
-  webinarFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 4,
-  },
-  webinarGoingRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  watchBtn: {
-    backgroundColor: BRAND.primary,
-    paddingHorizontal: 22,
-    paddingVertical: 9,
-    borderRadius: 999,
-  },
-  watchBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  cardEmoji: { fontSize: 72, opacity: 0.25 },
 
-  liveBadge: {
-    position: 'absolute',
-    top: 10,
-    left: 10,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: BRAND.liveBg,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+  statusBadge: {
+    position: 'absolute', top: 12, left: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
-  liveText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+  statusText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
   priceBadge: {
-    position: 'absolute',
-    top: 10,
-    right: 10,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
+    position: 'absolute', top: 12, right: 12,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
   },
-  priceBadgeFree: { backgroundColor: 'rgba(0,0,0,0.45)' },
-  priceText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+  priceBadgeFree: { backgroundColor: '#16A34A' },
+  priceText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
+
+  modePill: {
+    position: 'absolute', bottom: 52, left: 12,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
+  },
+  modePillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
+
+  cardOverlay: {
+    position: 'absolute', bottom: 0, left: 0, right: 0,
+    paddingHorizontal: 14, paddingVertical: 12,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    gap: 3,
+  },
+  cardTitle: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
+  cardSubtitle: { fontSize: 12, color: 'rgba(255,255,255,0.8)' },
+
+  cardMeta: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 14, paddingVertical: 12,
+    gap: 12, flexWrap: 'wrap',
+    borderBottomWidth: 1, borderBottomColor: BRAND.border,
+  },
+  metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  metaIcon: { fontSize: 12 },
+  metaText: { fontSize: 12, color: BRAND.textSecondary, fontWeight: '500' },
+  viewDetailBtn: { marginLeft: 'auto' },
+  viewDetailText: { fontSize: 13, fontWeight: '700', color: BRAND.primary },
+
+  descRow: { paddingHorizontal: 14, paddingVertical: 10 },
+  descText: { fontSize: 13, color: BRAND.textSecondary, lineHeight: 19 },
 
   pressed: { opacity: 0.88 },
 });

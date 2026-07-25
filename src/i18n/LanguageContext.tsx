@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { TRANSLATIONS, type LangCode, type TranslationKey } from './translations';
+import { translateText, translateBatch, clearTranslateCache } from './translate';
+import { setApiLang } from '@/constants/api';
 
 const STORAGE_KEY = 'sss.lang';
 const DEFAULT_LANG: LangCode = 'en';
@@ -33,10 +35,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
 
   const setLang = useCallback(async (next: LangCode) => {
     setLangState(next);
+    setApiLang(next);
+    clearTranslateCache();
     try {
       await AsyncStorage.setItem(STORAGE_KEY, next);
     } catch {}
   }, []);
+
+  // Sync API lang on initial load
+  useEffect(() => { setApiLang(lang); }, [lang]);
 
   const t = useCallback(
     (key: TranslationKey) => TRANSLATIONS[lang][key] ?? TRANSLATIONS.en[key] ?? key,
@@ -56,4 +63,43 @@ export function useLanguage() {
 
 export function useT() {
   return useLanguage().t;
+}
+
+/**
+ * Translates a single dynamic string (API data) to the current language.
+ * Returns the original text immediately, then updates once translation arrives.
+ * Usage: const label = useTranslated(item.name);
+ */
+export function useTranslated(text: string | null | undefined): string {
+  const { lang } = useLanguage();
+  const [translated, setTranslated] = useState<string>(text ?? '');
+
+  useEffect(() => {
+    if (!text) { setTranslated(''); return; }
+    setTranslated(text); // show original immediately
+    if (lang === 'en') return;
+    translateText(text, lang).then(setTranslated);
+  }, [text, lang]);
+
+  return translated;
+}
+
+/**
+ * Translates multiple dynamic strings in one batch call.
+ * Usage: const [name, desc] = useTranslatedBatch([item.name, item.description]);
+ */
+export function useTranslatedBatch(texts: (string | null | undefined)[]): string[] {
+  const { lang } = useLanguage();
+  const safeTexts = texts.map(t => t ?? '');
+  const [results, setResults] = useState<string[]>(safeTexts);
+
+  useEffect(() => {
+    setResults(safeTexts); // show originals immediately
+    if (lang === 'en') return;
+    const nonEmpty = safeTexts.filter(Boolean);
+    if (!nonEmpty.length) return;
+    translateBatch(safeTexts, lang).then(setResults);
+  }, [texts.join('||'), lang]);
+
+  return results;
 }

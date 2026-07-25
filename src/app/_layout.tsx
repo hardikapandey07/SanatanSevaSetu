@@ -18,7 +18,7 @@ function AuthRedirect({ splashDone }: { splashDone: boolean }) {
     TokenManager.isLoggedIn().then(loggedIn => {
       if (loggedIn) router.replace('/(tabs)/home');
     });
-  }, [splashDone]);
+  }, [splashDone, router]);
 
   return null;
 }
@@ -55,6 +55,7 @@ export default function RootLayout() {
             <Stack.Screen name="healing" />
             <Stack.Screen name="sanskrit-learning" />
             <Stack.Screen name="book-pooja" />
+            <Stack.Screen name="service-detail" />
             <Stack.Screen name="payment" />
             <Stack.Screen name="my-bookings" />
             <Stack.Screen name="notifications" />
@@ -63,6 +64,9 @@ export default function RootLayout() {
             <Stack.Screen name="reward-referral" />
             <Stack.Screen name="event-detail" />
             <Stack.Screen name="webinar-watch" />
+            <Stack.Screen name="broadcasts-list" />
+            <Stack.Screen name="group-puja-list" />
+            <Stack.Screen name="group-puja-detail" />
             <Stack.Screen name="(tabs)" />
           </Stack>
           <AuthRedirect splashDone={splashDone} />

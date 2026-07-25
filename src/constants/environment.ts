@@ -2,19 +2,14 @@
 // Change this URL to switch between development, staging, and production environments
 
 export const ENV_CONFIG = {
-  // Development/Testing API
-  API_BASE_URL: "http://api.sanatansevasetu.com",
-
-  // Alternative configurations (uncomment to use):
-  // STAGING_API_BASE_URL: 'https://staging-api.sanatansevasetu.com',
-  // PRODUCTION_API_BASE_URL: 'https://api.sanatansevasetu.com',
-
-  // API Settings
-  REQUEST_TIMEOUT: 10000, // 10 seconds
+  API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://api.sanatansevasetu.com',
+  GOOGLE_TRANSLATE_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_TRANSLATE_KEY ?? '',
+  RAZORPAY_KEY_ID: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? 'rzp_test_TEuOhTL51QQPXO',
+  UPI_PAYEE_VPA: process.env.EXPO_PUBLIC_UPI_VPA ?? 'abhishri09@okicici',
+  UPI_PAYEE_NAME: process.env.EXPO_PUBLIC_UPI_NAME ?? 'Sanatan Seva Setu',
+  REQUEST_TIMEOUT: 10000,
   RETRY_ATTEMPTS: 3,
-
-  // Debug Settings
-  DEBUG_API: __DEV__, // Enable API logging in development
+  DEBUG_API: __DEV__,
 };
 
 // Easy way to switch environments

@@ -44,7 +44,7 @@ export default function RegisterScreen() {
   });
 
   const isLogin = mode === 'login';
-  const mobileValid = mobile.length === 10;
+  const mobileValid = mobile.length === 10 && /^[6-9]\d{9}$/.test(mobile);
   const nameValid = isLogin || name.trim().length >= 1;
   const canSendOtp = mobileValid && nameValid && !loading;
 
@@ -129,6 +129,7 @@ export default function RegisterScreen() {
                 placeholder={t('namePlaceholder')}
                 placeholderTextColor={BRAND.textSecondary}
                 autoCapitalize="words"
+                maxLength={60}
                 style={styles.input}
               />
             </Field>

@@ -1,11 +1,15 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
-import { Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Image } from 'expo-image';
+
 import { ThemedText } from '@/components/themed-text';
+import { ApiService, type Pandit, type Service } from '@/constants/api';
+import { getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
 import { useT } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/translations';
@@ -23,42 +27,77 @@ const BRAND = {
   disabledBg: '#CFC4B0',
 };
 
-const SERVICES: { key: TranslationKey; price: string }[] = [
-  { key: 'satyanarayanPuja', price: '₹1,100' },
-  { key: 'grihaPravesh', price: '₹2,100' },
-  { key: 'weddingCeremony', price: '₹5,100' },
-  { key: 'abhishek', price: '₹700' },
-  { key: 'havan', price: '₹3,100' },
-];
 
-const PANDITS: { key: TranslationKey; price: string; exp: string }[] = [
-  { key: 'panditRameshSharma', price: '₹1,500', exp: '15 yrs' },
-  { key: 'panditSureshKumar', price: '₹1,200', exp: '10 yrs' },
-  { key: 'shriRamMandir', price: '₹2,000', exp: '25 yrs' },
-  { key: 'kashiVishwanath', price: '₹2,500', exp: '30 yrs' },
-];
 
 const TIMES = ['6:00 AM', '8:00 AM', '10:00 AM', '12:00 PM', '2:00 PM', '4:00 PM', '6:00 PM'];
 
-const STEP_LABELS: TranslationKey[] = ['selectService', 'chooseDateTime', 'selectPanditji', 'payment'];
+const GOTRAS = [
+  'Kashyap', 'Bharadwaj', 'Vashishtha', 'Atri', 'Vishwamitra',
+  'Gautam', 'Jamadagni', 'Agastya', 'Garg', 'Parashar',
+  'Shandilya', 'Kaushik', 'Angiras', 'Pulastya', 'Kratu',
+];
+
+const STEP_LABELS: TranslationKey[] = ['selectService', 'gotra', 'chooseDateTime', 'selectPanditji', 'payment'];
 
 export default function BookPoojaScreen() {
   const t = useT();
-  const [step, setStep] = useState(1);
-  const [service, setService] = useState<TranslationKey>('satyanarayanPuja');
+  const params = useLocalSearchParams<{ serviceId?: string }>();
+  const preselectedServiceId = params.serviceId ?? '';
+
+  const [step, setStep] = useState(preselectedServiceId ? 2 : 1);
+  const [services, setServices] = useState<Service[]>([]);
+  const [loadingServices, setLoadingServices] = useState(true);
+  const [pandits, setPandits] = useState<Pandit[]>([]);
+  const [loadingPandits, setLoadingPandits] = useState(true);
+  const [selectedServiceId, setSelectedServiceId] = useState(preselectedServiceId);
+  const [gotra, setGotra] = useState('');
+  const [address, setAddress] = useState('');
+  const [email, setEmail] = useState('');
+  const [showDetailsSheet, setShowDetailsSheet] = useState(false);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState('');
   const [date, setDate] = useState('');
+
+  useEffect(() => {
+    ApiService.getServices().then(data => {
+      setServices(data.filter(s => s.is_active));
+      setLoadingServices(false);
+    });
+    ApiService.getPandits().then(data => {
+      setPandits(data);
+      setLoadingPandits(false);
+    });
+    ApiService.getProfile().then(res => {
+      if (res.success && res.data) {
+        setAddress(res.data.address ?? '');
+        setEmail(res.data.email_id ?? '');
+      }
+    });
+  }, []);
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [time, setTime] = useState('');
-  const [pandit, setPandit] = useState<TranslationKey | ''>('');
+  const [pandit, setPandit] = useState('');
 
   const canProceed =
-    (step === 1 && !!service) ||
-    (step === 2 && !!date && !!time) ||
-    (step === 3 && !!pandit);
+    (step === 1 && !!selectedServiceId) ||
+    (step === 2 && !!gotra) ||
+    (step === 3 && !!date && !!time) ||
+    (step === 4 && !!pandit);
+
+  const groupedServices = services.reduce((acc, s) => {
+    if (!acc[s.category]) acc[s.category] = [];
+    acc[s.category].push(s);
+    return acc;
+  }, {} as Record<string, Service[]>);
+
+  const selectedService = services.find(s => s.id === selectedServiceId);
 
   const formatDate = (date: Date) => {
-    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD format
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   };
 
   const formatDisplayDate = (date: Date) => {
@@ -171,8 +210,8 @@ export default function BookPoojaScreen() {
   const isDateDisabled = (calendarDate: Date) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
-    calendarDate.setHours(0, 0, 0, 0);
-    return calendarDate < today;
+    const d = new Date(calendarDate.getFullYear(), calendarDate.getMonth(), calendarDate.getDate());
+    return d < today;
   };
   
   const isDateSelected = (calendarDate: Date) => {
@@ -184,16 +223,45 @@ export default function BookPoojaScreen() {
     setShowDatePicker(true);
   };
 
+  const selectedPandit = pandits.find(p => p.PanditId === pandit);
+
   const onNext = () => {
     if (!canProceed) return;
-    if (step < 3) { setStep(step + 1); return; }
+    if (step < 4) { setStep(step + 1); return; }
+    setDetailsError('');
+    setShowDetailsSheet(true);
+  };
+
+  const onDetailsSubmit = async () => {
+    if (!address || !email) return;
+    setDetailsLoading(true);
+    setDetailsError('');
+    const result = await ApiService.updateProfile({ address, email_id: email });
+    setDetailsLoading(false);
+    if (!result.success) {
+      setDetailsError(result.message);
+      return;
+    }
+    setShowDetailsSheet(false);
     router.push({
       pathname: '/payment',
-      params: { service: service as string, provider: pandit, date, time },
+      params: {
+        service: selectedService?.name ?? '',
+        serviceId: selectedService?.id ?? '',
+        servicePrice: String(selectedService?.price ?? ''),
+        provider: selectedPandit?.Name ?? '',
+        providerId: selectedPandit?.PanditId ?? '',
+        date,
+        time,
+        gotra,
+        address,
+        email,
+      },
     });
   };
 
   const onBack = () => {
+    if (step === 2 && preselectedServiceId) { router.back(); return; }
     if (step === 1) { router.back(); return; }
     setStep(step - 1);
   };
@@ -220,41 +288,113 @@ export default function BookPoojaScreen() {
         </SafeAreaView>
       </LinearGradient>
 
+      {/* Stepper — fixed, always visible */}
+      <View style={styles.stepperContainer}>
+        <Stepper current={step} labels={STEP_LABELS.map(k => t(k))} />
+      </View>
+
+      {/* Scrollable step content */}
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}>
-        <Stepper current={step} labels={STEP_LABELS.map(k => t(k))} />
-
         <View style={styles.card}>
           {/* Step 1 — Select Puja */}
           {step === 1 && (
             <>
               <ThemedText style={styles.sectionTitle}>{t('selectService')}</ThemedText>
-              <View style={{ gap: 10 }}>
-                {SERVICES.map(s => (
+              {loadingServices ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <View style={{ gap: 14 }}>
+                  {Object.entries(groupedServices).map(([category, items]) => (
+                    <View key={category} style={{ gap: 8 }}>
+                      <ThemedText style={styles.categoryLabel}>{category}</ThemedText>
+                      {items.map(s => (
+                        <Pressable
+                          key={s.id}
+                          onPress={() => setSelectedServiceId(s.id)}
+                          style={({ pressed }) => [
+                            styles.serviceRow,
+                            selectedServiceId === s.id && styles.serviceRowSelected,
+                            pressed && styles.pressed,
+                          ]}>
+                          <View style={styles.serviceThumb}>
+                            {s.image_url ? (
+                              <Image
+                                source={{ uri: `${getApiBaseUrl()}/${s.image_url}` }}
+                                style={styles.serviceThumbImg}
+                                contentFit="cover"
+                              />
+                            ) : (
+                              <ThemedText style={styles.serviceThumbEmoji}>🪔</ThemedText>
+                            )}
+                          </View>
+                          <View style={styles.serviceInfo}>
+                            <ThemedText
+                              style={[styles.serviceLabel, selectedServiceId === s.id && styles.serviceLabelSelected]}
+                              numberOfLines={2}>
+                              {s.name}
+                            </ThemedText>
+                            <ThemedText style={[styles.servicePrice, selectedServiceId === s.id && styles.servicePriceSelected]}>
+                              ₹{s.price.toLocaleString()}
+                            </ThemedText>
+                          </View>
+                          <View style={styles.serviceCheckWrap}>
+                            {selectedServiceId === s.id && (
+                              <SymbolView
+                                name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                                tintColor={BRAND.primary}
+                                size={20}
+                              />
+                            )}
+                          </View>
+                        </Pressable>
+                      ))}
+                    </View>
+                  ))}
+                </View>
+              )}
+            </>
+          )}
+
+          {/* Step 2 — Select Gotra */}
+          {step === 2 && (
+            <>
+              <ThemedText style={styles.sectionTitle}>{t('selectGotra')}</ThemedText>
+              <View style={{ gap: 8 }}>
+                {GOTRAS.map(g => (
                   <Pressable
-                    key={s.key}
-                    onPress={() => setService(s.key)}
+                    key={g}
+                    onPress={() => setGotra(g)}
                     style={({ pressed }) => [
                       styles.serviceRow,
-                      service === s.key && styles.serviceRowSelected,
+                      gotra === g && styles.serviceRowSelected,
                       pressed && styles.pressed,
                     ]}>
-                    <ThemedText style={[styles.serviceLabel, service === s.key && styles.serviceLabelSelected]}>
-                      {t(s.key)}
+                    <View style={[styles.serviceThumb, { backgroundColor: '#FFF1DE' }]}>
+                      <ThemedText style={styles.serviceThumbEmoji}>🕉️</ThemedText>
+                    </View>
+                    <ThemedText style={[styles.serviceLabel, { flex: 1 }, gotra === g && styles.serviceLabelSelected]}>
+                      {g}
                     </ThemedText>
-                    <ThemedText style={[styles.servicePrice, service === s.key && styles.servicePriceSelected]}>
-                      {s.price}
-                    </ThemedText>
+                    <View style={styles.serviceCheckWrap}>
+                      {gotra === g && (
+                        <SymbolView
+                          name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }}
+                          tintColor={BRAND.primary}
+                          size={20}
+                        />
+                      )}
+                    </View>
                   </Pressable>
                 ))}
               </View>
             </>
           )}
 
-          {/* Step 2 — Select Date & Time */}
-          {step === 2 && (
+          {/* Step 3 — Select Date & Time */}
+          {step === 3 && (
             <>
               <ThemedText style={styles.sectionTitle}>{t('chooseDateAndTime')}</ThemedText>
               <View style={styles.dateLabelRow}>
@@ -415,43 +555,116 @@ export default function BookPoojaScreen() {
             </>
           )}
 
-          {/* Step 3 — Select Panditji with Pricing */}
-          {step === 3 && (
+          {/* Step 4 — Select Panditji */}
+          {step === 4 && (
             <>
               <ThemedText style={styles.sectionTitle}>{t('selectPanditji')}</ThemedText>
-              <View style={{ gap: 10 }}>
-                {PANDITS.map(p => (
-                  <Pressable
-                    key={p.key}
-                    onPress={() => setPandit(p.key)}
-                    style={({ pressed }) => [
-                      styles.panditRow,
-                      pandit === p.key && styles.panditRowSelected,
-                      pressed && styles.pressed,
-                    ]}>
-                    <View style={styles.panditAvatar}>
-                      <SymbolView
-                        name={{ ios: 'person.fill', android: 'person', web: 'person' }}
-                        tintColor={pandit === p.key ? BRAND.primary : BRAND.textSecondary}
-                        size={20}
-                      />
-                    </View>
-                    <View style={{ flex: 1 }}>
-                      <ThemedText style={[styles.panditName, pandit === p.key && styles.panditNameSelected]}>
-                        {t(p.key)}
-                      </ThemedText>
-                      <ThemedText style={styles.panditExp}>{t('experienceLabel')}: {p.exp}</ThemedText>
-                    </View>
-                    <ThemedText style={[styles.panditPrice, pandit === p.key && styles.panditPriceSelected]}>
-                      {p.price}
-                    </ThemedText>
-                  </Pressable>
-                ))}
-              </View>
+              {loadingPandits ? (
+                <ActivityIndicator size="small" color={BRAND.primary} />
+              ) : (
+                <View style={{ gap: 10 }}>
+                  {pandits.map(p => (
+                    <Pressable
+                      key={p.PanditId}
+                      onPress={() => setPandit(p.PanditId)}
+                      style={({ pressed }) => [
+                        styles.panditRow,
+                        pandit === p.PanditId && styles.panditRowSelected,
+                        pressed && styles.pressed,
+                      ]}>
+                      <View style={styles.panditAvatar}>
+                        <SymbolView
+                          name={{ ios: 'person.fill', android: 'person', web: 'person' }}
+                          tintColor={pandit === p.PanditId ? BRAND.primary : BRAND.textSecondary}
+                          size={20}
+                        />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <ThemedText style={[styles.panditName, pandit === p.PanditId && styles.panditNameSelected]}>
+                          {p.Name}
+                        </ThemedText>
+                        <ThemedText style={styles.panditMeta}>
+                          {p.ExpInYears} · {p.Languages.join(', ')}
+                        </ThemedText>
+                      </View>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
             </>
           )}
         </View>
+      </ScrollView>
 
+      {/* Details Bottom Sheet */}
+      <Modal
+        visible={showDetailsSheet}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowDetailsSheet(false)}>
+        <Pressable style={styles.sheetOverlay} onPress={() => { Keyboard.dismiss(); setShowDetailsSheet(false); }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.sheetWrapper}>
+            <Pressable style={styles.sheet} onPress={() => {}}>
+              <View style={styles.sheetHandle} />
+              <ThemedText style={styles.sheetTitle}>{t('yourDetails')}</ThemedText>
+              <View style={{ gap: 12 }}>
+                <View style={{ gap: 6 }}>
+                  <ThemedText style={styles.sectionSubtitle}>{t('addressLabel')}</ThemedText>
+                  <TextInput
+                    style={[styles.input, { height: 80, textAlignVertical: 'top', paddingTop: 10 }]}
+                    placeholder={t('addressPlaceholder')}
+                    placeholderTextColor={BRAND.textSecondary}
+                    value={address}
+                    onChangeText={setAddress}
+                    multiline
+                  />
+                </View>
+                <View style={{ gap: 6 }}>
+                  <ThemedText style={styles.sectionSubtitle}>{t('emailLabel')}</ThemedText>
+                  <TextInput
+                    style={styles.input}
+                    placeholder={t('emailPlaceholder')}
+                    placeholderTextColor={BRAND.textSecondary}
+                    value={email}
+                    onChangeText={setEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                  />
+                </View>
+              </View>
+              {!!detailsError && (
+                <ThemedText style={styles.sheetError}>{detailsError}</ThemedText>
+              )}
+              <Pressable
+                onPress={onDetailsSubmit}
+                disabled={!address || !email || detailsLoading}
+                style={({ pressed }) => [
+                  styles.cta,
+                  { marginTop: 16 },
+                  (!address || !email || detailsLoading) && styles.ctaDisabled,
+                  pressed && address && email && !detailsLoading && styles.pressed,
+                ]}>
+                {detailsLoading
+                  ? <ActivityIndicator size="small" color="#FFFFFF" />
+                  : (
+                    <>
+                      <ThemedText style={styles.ctaText}>{t('proceedToPayment')}</ThemedText>
+                      <SymbolView
+                        name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+                        tintColor="#FFFFFF"
+                        size={14}
+                      />
+                    </>
+                  )
+                }
+              </Pressable>
+            </Pressable>
+          </KeyboardAvoidingView>
+        </Pressable>
+      </Modal>
+
+      {/* Next button — fixed at bottom */}
+      <SafeAreaView edges={['bottom']} style={styles.footer}>
         <Pressable
           onPress={onNext}
           disabled={!canProceed}
@@ -460,51 +673,53 @@ export default function BookPoojaScreen() {
             !canProceed && styles.ctaDisabled,
             pressed && canProceed && styles.pressed,
           ]}>
-          <ThemedText style={styles.ctaText}>
-            {step === 3 ? t('proceedToPayment') : t('next')}
-          </ThemedText>
+          <ThemedText style={styles.ctaText}>{t('next')}</ThemedText>
           <SymbolView
             name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
             tintColor="#FFFFFF"
             size={14}
           />
         </Pressable>
-      </ScrollView>
+      </SafeAreaView>
     </View>
   );
 }
 
 function Stepper({ current, labels }: { current: number; labels: string[] }) {
+  const total = labels.length;
   return (
     <View style={styles.stepperWrap}>
       <View style={styles.stepperRow}>
-        {[1, 2, 3, 4].map((n, i) => (
-          <View key={n} style={styles.stepperItem}>
-            <View style={styles.stepColumn}>
-              <View style={[styles.stepCircle, n <= current ? styles.stepCircleActive : styles.stepCircleInactive]}>
-                {n < current ? (
-                  <SymbolView
-                    name={{ ios: 'checkmark', android: 'check', web: 'check' }}
-                    tintColor="#FFFFFF"
-                    size={12}
-                  />
-                ) : (
-                  <ThemedText style={[styles.stepNum, n <= current ? styles.stepNumActive : styles.stepNumInactive]}>
-                    {n}
-                  </ThemedText>
-                )}
+        {labels.map((label, i) => {
+          const n = i + 1;
+          return (
+            <View key={n} style={styles.stepperItem}>
+              <View style={styles.stepColumn}>
+                <View style={[styles.stepCircle, n <= current ? styles.stepCircleActive : styles.stepCircleInactive]}>
+                  {n < current ? (
+                    <SymbolView
+                      name={{ ios: 'checkmark', android: 'check', web: 'check' }}
+                      tintColor="#FFFFFF"
+                      size={10}
+                    />
+                  ) : (
+                    <ThemedText style={[styles.stepNum, n <= current ? styles.stepNumActive : styles.stepNumInactive]}>
+                      {n}
+                    </ThemedText>
+                  )}
+                </View>
+                <ThemedText
+                  style={[styles.stepLabel, n === current && styles.stepLabelActive]}
+                  numberOfLines={2}>
+                  {label}
+                </ThemedText>
               </View>
-              <ThemedText
-                style={[styles.stepLabel, n === current && styles.stepLabelActive]}
-                numberOfLines={2}>
-                {labels[i] || ''}
-              </ThemedText>
+              {i < total - 1 && (
+                <View style={[styles.stepLine, n < current ? styles.stepLineActive : styles.stepLineInactive]} />
+              )}
             </View>
-            {i < 3 && (
-              <View style={[styles.stepLine, n < current ? styles.stepLineActive : styles.stepLineInactive]} />
-            )}
-          </View>
-        ))}
+          );
+        })}
       </View>
     </View>
   );
@@ -529,8 +744,24 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
+  stepperContainer: {
+    backgroundColor: BRAND.bg,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.three,
+    paddingBottom: Spacing.two,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+  },
   scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.three, paddingBottom: Spacing.five, gap: Spacing.three },
+  scrollContent: { padding: Spacing.three, paddingBottom: Spacing.three, gap: Spacing.three },
+  footer: {
+    backgroundColor: BRAND.bg,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    paddingBottom: Spacing.two,
+    borderTopWidth: 1,
+    borderTopColor: BRAND.border,
+  },
 
   stepperWrap: { gap: 8 },
   stepperRow: { flexDirection: 'row', alignItems: 'flex-start' },
@@ -564,24 +795,43 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   sectionTitle: { fontSize: 16, fontWeight: '800', color: BRAND.text },
+  categoryLabel: { fontSize: 13, fontWeight: '700', color: BRAND.textSecondary, textTransform: 'uppercase' },
   sectionSubtitle: { fontSize: 14, fontWeight: '700', color: BRAND.text, marginTop: 4 },
 
   serviceRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
     borderWidth: 1,
     borderColor: BRAND.inputBorder,
     borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 14,
+    paddingHorizontal: 10,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
   },
   serviceRowSelected: { borderColor: BRAND.primary, backgroundColor: BRAND.selectedBg },
-  serviceLabel: { fontSize: 14, fontWeight: '600', color: BRAND.text },
+  serviceThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 8,
+    backgroundColor: '#FFF1DE',
+    alignItems: 'center',
+    justifyContent: 'center',
+    overflow: 'hidden',
+    flexShrink: 0,
+  },
+  serviceThumbImg: { width: '100%', height: '100%' },
+  serviceThumbEmoji: { fontSize: 22 },
+  serviceInfo: {
+    flex: 1,
+    gap: 3,
+    minWidth: 0,
+  },
+  serviceLabel: { fontSize: 12, fontWeight: '600', color: BRAND.text, lineHeight: 16 },
   serviceLabelSelected: { color: BRAND.primary },
-  servicePrice: { fontSize: 13, fontWeight: '700', color: BRAND.textSecondary },
+  servicePrice: { fontSize: 12, fontWeight: '700', color: BRAND.textSecondary },
   servicePriceSelected: { color: BRAND.primary },
+  serviceCheckWrap: { width: 22, alignItems: 'center', flexShrink: 0 },
 
   dateLabelRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   dateLabel: { fontSize: 13, fontWeight: '600', color: BRAND.primary },
@@ -782,9 +1032,7 @@ const styles = StyleSheet.create({
   },
   panditName: { fontSize: 14, fontWeight: '700', color: BRAND.text },
   panditNameSelected: { color: BRAND.primary },
-  panditExp: { fontSize: 11, color: BRAND.textSecondary, marginTop: 2 },
-  panditPrice: { fontSize: 15, fontWeight: '800', color: BRAND.textSecondary },
-  panditPriceSelected: { color: BRAND.primary },
+  panditMeta: { fontSize: 11, color: BRAND.textSecondary, marginTop: 2 },
 
   cta: {
     flexDirection: 'row',
@@ -798,4 +1046,25 @@ const styles = StyleSheet.create({
   ctaDisabled: { backgroundColor: BRAND.disabledBg },
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
   pressed: { opacity: 0.85 },
+
+  sheetOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  sheetWrapper: { justifyContent: 'flex-end' },
+  sheet: {
+    backgroundColor: BRAND.card,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: Spacing.three,
+    paddingBottom: 32,
+    gap: 12,
+  },
+  sheetHandle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: BRAND.border,
+    alignSelf: 'center',
+    marginBottom: 8,
+  },
+  sheetTitle: { fontSize: 17, fontWeight: '800', color: BRAND.text, marginBottom: 4 },
+  sheetError: { fontSize: 13, color: '#DC2626', fontWeight: '600', textAlign: 'center' },
 });

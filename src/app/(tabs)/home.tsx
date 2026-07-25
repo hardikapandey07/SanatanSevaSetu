@@ -1,8 +1,8 @@
-import { Image } from 'expo-image';
-import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
-import { useEffect, useRef, useState } from 'react';
+import { Image } from "expo-image";
+import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
+import { SymbolView } from "expo-symbols";
+import { useEffect, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -13,143 +13,242 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
-  TextInput,
   View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
-import { ThemedText } from '@/components/themed-text';
-import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import { ThemedText } from "@/components/themed-text";
+import {
+  ApiService,
+  type Banner,
+  type Broadcast,
+  type Mandir,
+} from "@/constants/api";
+import { getApiBaseUrl } from "@/constants/environment";
+import { LANGUAGES } from "@/constants/languages";
+import { Spacing } from "@/constants/theme";
+import { useLanguage, useTranslatedBatch } from "@/i18n/LanguageContext";
+import type { LangCode } from "@/i18n/translations";
 
 const BRAND = {
-  primary: '#E8731C',
-  primaryDark: '#C95A0E',
-  bg: '#F7F4EE',
-  card: '#FFFFFF',
-  border: '#EFE7D7',
-  text: '#1F1A14',
-  textSecondary: '#6B6258',
-  searchBg: 'rgba(255,255,255,0.95)',
+  primary: "#E8731C",
+  primaryDark: "#C95A0E",
+  bg: "#F7F4EE",
+  card: "#FFFFFF",
+  border: "#EFE7D7",
+  text: "#1F1A14",
+  textSecondary: "#6B6258",
+  searchBg: "rgba(255,255,255,0.95)",
 };
 
-type DropdownItem = {
-  labelKey: TranslationKey;
-  icon: { ios: string; android: string; web: string };
-  onPress: () => void;
-  danger?: boolean;
-};
-
-type QuickAction = {
-  label: TranslationKey;
-  emoji: string;
-  bg: string;
-  route: string;
-};
-
-const QUICK_ACTIONS: QuickAction[] = [
-  { label: 'bookPooja',       emoji: '🪔', bg: '#FFF1DE', route: '/book-pooja' },
-  { label: 'panditSearch',    emoji: '🙏', bg: '#FEF3C7', route: '/pandit-search' },
-  { label: 'templeSearch',    emoji: '🛕', bg: '#D1FAE5', route: '/temple-search' },
-  { label: 'healing',         emoji: '🧘', bg: '#EDE9FE', route: '/healing' },
-  { label: 'liveAarti',       emoji: '📅', bg: '#DBEAFE', route: '/(tabs)/events' },
-  { label: 'sanskritLearning',emoji: '📦', bg: '#FCE7F3', route: '/sanskrit-learning' },
+const BANNERS = [
+  {
+    titleKey: "bannerSunderkandTitle",
+    subtitleKey: "bannerSunderkandSubtitle",
+    colors: ["#B83227", "#7A1F18"],
+    showLive: true,
+  },
+  {
+    titleKey: "bannerAartiTitle",
+    subtitleKey: "bannerAartiSubtitle",
+    colors: ["#D97706", "#92400E"],
+    showLive: true,
+  },
+  {
+    titleKey: "bannerPoojaTitle",
+    subtitleKey: "bannerPoojaSubtitle",
+    colors: ["#7C3AED", "#4C1D95"],
+    showLive: false,
+  },
+  {
+    titleKey: "bannerPanditTitle",
+    subtitleKey: "bannerPanditSubtitle",
+    colors: ["#0F766E", "#134E4A"],
+    showLive: false,
+  },
 ];
 
-type BannerItem = {
-  titleKey: TranslationKey;
-  subtitleKey: TranslationKey;
-  colors: [string, string];
-  showLive: boolean;
+type PanditItem = {
+  name: string;
+  speciality: string;
+  rating: string;
+  exp: string;
 };
-
-const BANNERS: BannerItem[] = [
-  { titleKey: 'bannerSunderkandTitle', subtitleKey: 'bannerSunderkandSubtitle', colors: ['#B83227', '#7A1F18'], showLive: true },
-  { titleKey: 'bannerAartiTitle',      subtitleKey: 'bannerAartiSubtitle',      colors: ['#D97706', '#92400E'], showLive: true },
-  { titleKey: 'bannerPoojaTitle',      subtitleKey: 'bannerPoojaSubtitle',      colors: ['#7C3AED', '#4C1D95'], showLive: false },
-  { titleKey: 'bannerPanditTitle',     subtitleKey: 'bannerPanditSubtitle',     colors: ['#0F766E', '#134E4A'], showLive: false },
-];
-
-type PanditItem = { name: string; speciality: string; rating: string; exp: string };
 const FEATURED_PANDITS: PanditItem[] = [
-  { name: 'Pt. Ramesh Sharma', speciality: 'Grihapravesh, Vivah', rating: '4.9', exp: '18 yrs' },
-  { name: 'Pt. Suresh Joshi',  speciality: 'Satyanarayan, Katha', rating: '4.8', exp: '12 yrs' },
-  { name: 'Pt. Hari Prasad',   speciality: 'Vastu, Havan',        rating: '4.7', exp: '20 yrs' },
+  {
+    name: "Pt. Ramesh Sharma",
+    speciality: "Grihapravesh, Vivah",
+    rating: "4.9",
+    exp: "18 yrs",
+  },
+  {
+    name: "Pt. Suresh Joshi",
+    speciality: "Satyanarayan, Katha",
+    rating: "4.8",
+    exp: "12 yrs",
+  },
+  {
+    name: "Pt. Hari Prasad",
+    speciality: "Vastu, Havan",
+    rating: "4.7",
+    exp: "20 yrs",
+  },
 ];
 
-type TempleItem = { name: string; deity: string; location: string; rating: string };
+type TempleItem = {
+  name: string;
+  deity: string;
+  location: string;
+  rating: string;
+};
 const POPULAR_TEMPLES: TempleItem[] = [
-  { name: 'Siddhivinayak Temple', deity: 'Lord Ganesha', location: 'Mumbai',   rating: '4.9' },
-  { name: 'Kashi Vishwanath',     deity: 'Lord Shiva',   location: 'Varanasi', rating: '5.0' },
-  { name: 'Tirupati Balaji',      deity: 'Lord Vishnu',  location: 'Tirupati', rating: '5.0' },
+  {
+    name: "Siddhivinayak Temple",
+    deity: "Lord Ganesha",
+    location: "Mumbai",
+    rating: "4.9",
+  },
+  {
+    name: "Kashi Vishwanath",
+    deity: "Lord Shiva",
+    location: "Varanasi",
+    rating: "5.0",
+  },
+  {
+    name: "Tirupati Balaji",
+    deity: "Lord Vishnu",
+    location: "Tirupati",
+    rating: "5.0",
+  },
 ];
 
-type HealingExpert = { name: string; speciality: string; rating: string; emoji: string };
+type HealingExpert = {
+  name: string;
+  speciality: string;
+  rating: string;
+  emoji: string;
+};
 const HEALING_EXPERTS: HealingExpert[] = [
-  { name: 'Dr. Meera Devi',  speciality: 'Pranic Healing, Reiki',    rating: '4.8', emoji: '🧘‍♀️' },
-  { name: 'Swami Ananda',    speciality: 'Ayurveda, Meditation',     rating: '4.9', emoji: '🌿' },
-  { name: 'Yogi Ramkrishna', speciality: 'Kundalini, Healing',       rating: '4.7', emoji: '🔮' },
+  {
+    name: "Dr. Meera Devi",
+    speciality: "Pranic Healing, Reiki",
+    rating: "4.8",
+    emoji: "🧘‍♀️",
+  },
+  {
+    name: "Swami Ananda",
+    speciality: "Ayurveda, Meditation",
+    rating: "4.9",
+    emoji: "🌿",
+  },
+  {
+    name: "Yogi Ramkrishna",
+    speciality: "Kundalini, Healing",
+    rating: "4.7",
+    emoji: "🔮",
+  },
 ];
 
 type BlogItem = { tag: string; title: string; emoji: string };
 const TRENDING_BLOGS: BlogItem[] = [
-  { tag: 'Ritual',    title: 'The Significance of Satyanarayan Puja', emoji: '🪔' },
-  { tag: 'Astrology', title: 'Vedic Astrology: Your October 2025 Guide', emoji: '⭐' },
-  { tag: 'Healing',   title: 'Benefits of Daily Mantra Chanting',     emoji: '🎵' },
+  {
+    tag: "Ritual",
+    title: "The Significance of Satyanarayan Puja",
+    emoji: "🪔",
+  },
+  {
+    tag: "Astrology",
+    title: "Vedic Astrology: Your October 2025 Guide",
+    emoji: "⭐",
+  },
+  { tag: "Healing", title: "Benefits of Daily Mantra Chanting", emoji: "🎵" },
 ];
 
-type EventItem = { titleKey: TranslationKey; date: string; time: string };
-const EVENTS: EventItem[] = [
-  { titleKey: 'eventSpiritualWebinar', date: 'May 5, 2026',  time: '6:00 PM' },
-  { titleKey: 'eventChantingProgram',  date: 'May 7, 2026',  time: '5:30 PM' },
-  { titleKey: 'eventKathaSession',     date: 'May 10, 2026', time: '7:00 PM' },
+const LIVE_BG_COLORS = ["#7A1F18", "#1E3A5F", "#134E4A", "#4A1D96", "#92400E"];
+const LIVE_EMOJIS = ["🪔", "📖", "🔥", "🙏", "🎵"];
+const UPCOMING_BG_COLORS = [
+  "#C8E6C9",
+  "#B0BEC5",
+  "#FFCCBC",
+  "#E1BEE7",
+  "#B3E5FC",
 ];
+const UPCOMING_EMOJIS = ["🌸", "🏔️", "🪔", "🙏", "⭐"];
 
 const SIDE_MENU_ITEMS = [
-  { icon: { ios: 'building.columns.fill', android: 'account_balance',  web: 'account_balance'  }, label: 'Mandir Search',     route: '/temple-search'     },
-  { icon: { ios: 'person.fill',           android: 'person',           web: 'person'           }, label: 'Pandit Search',     route: '/pandit-search'     },
-  { icon: { ios: 'heart.fill',            android: 'favorite',         web: 'favorite'         }, label: 'Healing Agent',     route: '/healing'           },
-  { icon: { ios: 'book.fill',             android: 'menu_book',        web: 'menu_book'        }, label: 'Sanskrit Learning', route: '/sanskrit-learning' },
+  {
+    icon: {
+      ios: "building.columns.fill",
+      android: "account_balance",
+      web: "account_balance",
+    },
+    label: "Mandir Search",
+    route: "/temple-search",
+  },
+  {
+    icon: { ios: "person.fill", android: "person", web: "person" },
+    label: "Pandit Search",
+    route: "/pandit-search",
+  },
+  {
+    icon: { ios: "person.badge.plus", android: "person_add", web: "person_add" },
+    label: "Register as Pandit",
+    route: "/pandit-register",
+  },
+  {
+    icon: { ios: "building.columns.fill", android: "account_balance", web: "account_balance" },
+    label: "Register Mandir",
+    route: "/mandir-register",
+  },
 ] as const;
 
 export default function HomeScreen() {
-  const t = useT();
-  const [search, setSearch] = useState('');
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { t, lang, setLang } = useLanguage();
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const slideAnim = useState(() => new Animated.Value(-280))[0];
-  const [dropdownPos, setDropdownPos] = useState<{ top: number; right: number } | null>(null);
-  const menuBtnRef = useRef<View>(null);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [liveItems, setLiveItems] = useState<Broadcast[]>([]);
+  const [upcomingItems, setUpcomingItems] = useState<Broadcast[]>([]);
+  const [liveLoading, setLiveLoading] = useState(true);
+  const [upcomingLoading, setUpcomingLoading] = useState(true);
+  const [mandirs, setMandirs] = useState<Mandir[]>([]);
+  const [mandirLoading, setMandirLoading] = useState(true);
+
+  useEffect(() => {
+    setLiveLoading(true);
+    setUpcomingLoading(true);
+    setMandirLoading(true);
+    ApiService.getActiveBanners().then((data) => setBanners(data));
+    ApiService.getLiveBroadcasts().then((data) => {
+      setLiveItems(data);
+      setLiveLoading(false);
+    });
+    ApiService.getUpcomingBroadcasts().then((data) => {
+      setUpcomingItems(data);
+      setUpcomingLoading(false);
+    });
+    ApiService.getMandirs().then((data) => {
+      setMandirs(data);
+      setMandirLoading(false);
+    });
+  }, [lang]);
 
   const openSideMenu = () => {
     setSideMenuOpen(true);
-    Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, bounciness: 0 }).start();
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      bounciness: 0,
+    }).start();
   };
   const closeSideMenu = () => {
-    Animated.timing(slideAnim, { toValue: -280, useNativeDriver: true, duration: 220 }).start(
-      () => setSideMenuOpen(false)
-    );
+    Animated.timing(slideAnim, {
+      toValue: -280,
+      useNativeDriver: true,
+      duration: 220,
+    }).start(() => setSideMenuOpen(false));
   };
-
-  const openMenu = () => {
-    if (Platform.OS === 'web') {
-      // On web, use a simpler positioning approach
-      setDropdownPos({ top: 0, right: 0 }); // Will be positioned via CSS
-      setMenuOpen(true);
-    } else {
-      // On mobile, use measure for precise positioning
-      menuBtnRef.current?.measure((_x, _y, width, height, pageX, pageY) => {
-        setDropdownPos({ top: pageY + height + 4, right: Dimensions.get('window').width - pageX - width });
-        setMenuOpen(true);
-      });
-    }
-  };
-
-  const DROPDOWN_ITEMS: DropdownItem[] = [
-    { labelKey: 'registerAsPandit', icon: { ios: 'person.badge.plus', android: 'person_add', web: 'person_add' }, onPress: () => { setMenuOpen(false); router.push('/pandit-register'); } },
-    { labelKey: 'registerMandir',   icon: { ios: 'building.columns.fill', android: 'account_balance', web: 'account_balance' }, onPress: () => { setMenuOpen(false); router.push('/mandir-register'); } },
-  ];
 
   return (
     <View style={styles.root}>
@@ -158,115 +257,245 @@ export default function HomeScreen() {
         colors={[BRAND.primary, BRAND.primaryDark]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 0 }}
-        style={styles.header}>
-        <SafeAreaView edges={['top']} style={styles.headerInner}>
+        style={styles.header}
+      >
+        <SafeAreaView edges={["top"]} style={styles.headerInner}>
           <View style={styles.headerTop}>
             {/* Left: 3-dot menu + logo + welcome text */}
             <View style={styles.brandRow}>
-              <Pressable onPress={openSideMenu} style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+              <Pressable
+                onPress={openSideMenu}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
                 <SymbolView
-                  name={{ ios: 'ellipsis', android: 'more_vert', web: 'more_vert' }}
+                  name={{
+                    ios: "ellipsis",
+                    android: "more_vert",
+                    web: "more_vert",
+                  }}
                   tintColor="#FFFFFF"
                   size={20}
                 />
               </Pressable>
               <View style={styles.brandLogo}>
                 <Image
-                  source={require('@/assets/images/logo.jpg')}
+                  source={require("@/assets/images/logo.jpg")}
                   style={styles.brandLogoImg}
                   contentFit="contain"
                 />
               </View>
-              <View>
-                <ThemedText style={styles.welcomeText}>{t('welcomeBack')} 🙏</ThemedText>
-                <ThemedText style={styles.brandText}>{t('brand')}</ThemedText>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <ThemedText style={styles.welcomeText} numberOfLines={1}>
+                  {t("welcomeBack")} 🙏
+                </ThemedText>
+                <ThemedText style={styles.brandText} numberOfLines={1}>
+                  {t("brand")}
+                </ThemedText>
               </View>
             </View>
 
-            {/* Right: notification + menu */}
+            {/* Right: language + notification */}
             <View style={styles.headerActions}>
               <Pressable
-                onPress={() => router.push('/notifications')}
-                style={({ pressed }) => [styles.iconBtn, pressed && styles.pressed]}>
+                onPress={() => setLangPickerOpen(true)}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <ThemedText style={styles.langIconText}>
+                  {lang.toUpperCase()}
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                onPress={() => router.push("/notifications")}
+                style={({ pressed }) => [
+                  styles.iconBtn,
+                  pressed && styles.pressed,
+                ]}
+              >
                 <SymbolView
-                  name={{ ios: 'bell', android: 'notifications_none', web: 'notifications_none' }}
+                  name={{
+                    ios: "bell",
+                    android: "notifications_none",
+                    web: "notifications_none",
+                  }}
                   tintColor="#FFFFFF"
                   size={20}
                 />
               </Pressable>
-              <Pressable
-                ref={menuBtnRef}
-                onPress={openMenu}
-                accessibilityLabel="Join"
-                style={({ pressed }) => [styles.joinBtn, pressed && styles.pressed]}>
-                <ThemedText style={styles.joinBtnText}>{t('join')}</ThemedText>
-              </Pressable>
             </View>
           </View>
+          {/* Search Bar */}
+          <Pressable
+            onPress={() => router.push("/pandit-search")}
+            style={styles.searchBar}
+          >
+            <SymbolView
+              name={{
+                ios: "magnifyingglass",
+                android: "search",
+                web: "search",
+              }}
+              tintColor={BRAND.textSecondary}
+              size={16}
+            />
+            <ThemedText style={styles.searchBarText}>
+              {t("searchPlaceholderNew")}
+            </ThemedText>
+          </Pressable>
         </SafeAreaView>
       </LinearGradient>
-
-      {/* ── Search bar (outside gradient, on bg) ── */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchWrap}>
-          <SymbolView
-            name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }}
-            tintColor={BRAND.textSecondary}
-            size={16}
-          />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder={t('searchPlaceholderNew')}
-            placeholderTextColor={BRAND.textSecondary}
-            style={styles.searchInput}
-          />
-        </View>
-      </View>
 
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-
+        showsVerticalScrollIndicator={false}
+      >
         {/* Banner Slider */}
-        <BannerSlider t={t} />
+        <BannerSlider banners={banners} />
 
-        {/* Quick Actions */}
-        <ThemedText style={styles.sectionTitle}>{t('quickActions')}</ThemedText>
-        <View style={styles.quickGrid}>
-          {QUICK_ACTIONS.map(item => (
-            <Pressable
-              key={item.label}
-              onPress={() => router.push(item.route as never)}
-              style={({ pressed }) => [styles.quickCard, pressed && styles.pressed]}>
-              <View style={[styles.quickEmojiBg, { backgroundColor: item.bg }]}>
-                <ThemedText style={styles.quickEmoji}>{item.emoji}</ThemedText>
+        {/* Book Puja */}
+        <ThemedText style={styles.sectionTitle}>Book Puja</ThemedText>
+        <View style={{ gap: 8 }}>
+          {/* Row 1: 2 cards */}
+          <View style={styles.pujaCategRow}>
+            {([{ label: 'Group Puja', sub: 'Join Temple Pujas', img: require("@/assets/images/GroupPuja_bg.jpeg"), type: 'group' }, { label: 'Individual Puja', sub: 'Personalized Sankalp', img: require("@/assets/images/indivisualPuaj_bg.jpeg"), type: 'individual' }] as const).map((cat) => (
+              <Pressable
+                key={cat.label}
+                onPress={() => router.push({ pathname: "/group-puja-list", params: { type: cat.type } })}
+                style={({ pressed }) => [styles.pujaCategCard, pressed && styles.pressed]}
+              >
+                <Image
+                  source={cat.img}
+                  style={StyleSheet.absoluteFill}
+                  contentFit="cover"
+                />
+                <LinearGradient
+                  colors={["transparent", "rgba(0,0,0,0.65)"]}
+                  style={StyleSheet.absoluteFill}
+                />
+                <View style={styles.pujaCategBottom}>
+                  <ThemedText style={styles.pujaCategTitle}>{cat.label}</ThemedText>
+                  <ThemedText style={styles.pujaCategSub}>{cat.sub}</ThemedText>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+          {/* Row 2: Lokpriya full-width */}
+          <Pressable
+            onPress={() => router.push({ pathname: "/group-puja-list", params: { type: 'lokpriya' } })}
+            style={({ pressed }) => [styles.pujaCategCardWide, pressed && styles.pressed]}
+          >
+            <Image
+              source={require("@/assets/images/quick.jpeg")}
+              style={StyleSheet.absoluteFill}
+              contentFit="cover"
+            />
+            <LinearGradient
+              colors={["transparent", "rgba(201,90,14,0.75)", "rgba(180,70,0,0.92)"]}
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={styles.lokpriyaBadge}>
+              <ThemedText style={styles.lokpriyaBadgeText}>⭐ Most Booked</ThemedText>
+            </View>
+            <View style={styles.lokpriyaBottom}>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={styles.lokpriyaTitle}>⭐ Lokpriya Puja</ThemedText>
+                <ThemedText style={styles.lokpriyaSub}>Most Booked • Premium Ritual</ThemedText>
               </View>
-              <ThemedText style={styles.quickLabel}>{t(item.label)}</ThemedText>
-            </Pressable>
-          ))}
+              <View style={styles.lokpriyaBookBtn}>
+                <ThemedText style={styles.lokpriyaBookBtnText}>Book Now</ThemedText>
+              </View>
+            </View>
+          </Pressable>
         </View>
 
         {/* Live Services */}
-        <ThemedText style={styles.sectionTitle}>{t('liveServices')}</ThemedText>
-        <View style={{ gap: Spacing.two }}>
-          <LiveRow label={t('liveAarti')} badgeText={t('liveNow')} isLive />
-          <LiveRow label={t('liveKatha')} badgeText={t('startingSoon')} isLive={false} />
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.liveSectionTitleRow}>
+            <View style={styles.liveDotIndicator} />
+            <ThemedText style={styles.sectionTitle}>
+              {t("liveServices")}
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/broadcasts-list",
+                params: { type: "live" },
+              })
+            }
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <ThemedText style={styles.seeAll}>See all ›</ThemedText>
+          </Pressable>
         </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.hScroll}
+          contentContainerStyle={styles.hScrollContent}
+        >
+          {liveLoading ? (
+            [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
+          ) : liveItems.length > 0 ? (
+            liveItems.map((item, i) => (
+              <LiveServiceCard
+                key={item.id}
+                item={item}
+                bg={LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]}
+                emoji={LIVE_EMOJIS[i % LIVE_EMOJIS.length]}
+              />
+            ))
+          ) : (
+            <NoDataFound label="No live services right now" emoji="📺" />
+          )}
+        </ScrollView>
 
         {/* Upcoming Events */}
         <View style={styles.eventsHeaderRow}>
-          <ThemedText style={styles.sectionTitle}>{t('upcomingEvents')}</ThemedText>
-          <Pressable><ThemedText style={styles.viewAll}>{t('viewAll')}</ThemedText></Pressable>
+          <ThemedText style={styles.sectionTitle}>
+            {t("upcomingEvents")}
+          </ThemedText>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/broadcasts-list",
+                params: { type: "upcoming" },
+              })
+            }
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <ThemedText style={styles.viewAll}>{t("viewAll")} ›</ThemedText>
+          </Pressable>
         </View>
-        <View style={{ gap: Spacing.two }}>
-          {EVENTS.map(ev => (
-            <EventCard key={ev.titleKey} title={t(ev.titleKey)} date={ev.date} time={ev.time} />
-          ))}
-        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.hScroll}
+          contentContainerStyle={styles.hScrollContent}
+        >
+          {upcomingLoading ? (
+            [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
+          ) : upcomingItems.length > 0 ? (
+            upcomingItems.map((item, i) => (
+              <UpcomingEventCard
+                key={item.id}
+                item={item}
+                bg={UPCOMING_BG_COLORS[i % UPCOMING_BG_COLORS.length]}
+                emoji={UPCOMING_EMOJIS[i % UPCOMING_EMOJIS.length]}
+              />
+            ))
+          ) : (
+            <NoDataFound label="No upcoming events" emoji="📅" />
+          )}
+        </ScrollView>
 
-        {/* Featured Pandits */}
+        {/* Featured Pandits — temporarily commented out
         <View style={styles.sectionHeaderRow}>
           <ThemedText style={styles.sectionTitleEmoji}>✨ {t('featuredPandits')}</ThemedText>
           <Pressable onPress={() => router.push('/pandit-search')} style={({ pressed }) => [pressed && styles.pressed]}>
@@ -285,33 +514,38 @@ export default function HomeScreen() {
             </Pressable>
           ))}
         </ScrollView>
+        */}
 
         {/* Popular Temples */}
         <View style={styles.sectionHeaderRow}>
-          <ThemedText style={styles.sectionTitleEmoji}>🛕 {t('popularTemples')}</ThemedText>
-          <Pressable onPress={() => router.push('/temple-search')} style={({ pressed }) => [pressed && styles.pressed]}>
-            <ThemedText style={styles.seeAll}>{t('seeAll')} ›</ThemedText>
+          <ThemedText style={styles.sectionTitleEmoji}>
+            🛕 {t("popularTemples")}
+          </ThemedText>
+          <Pressable
+            onPress={() => router.push("/temple-search")}
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <ThemedText style={styles.seeAll}>{t("seeAll")} ›</ThemedText>
           </Pressable>
         </View>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.hScroll} contentContainerStyle={styles.hScrollContent}>
-          {POPULAR_TEMPLES.map(temple => (
-            <Pressable key={temple.name} style={({ pressed }) => [styles.templeCard, pressed && styles.pressed]}>
-              <View style={styles.templeImgPlaceholder}>
-                <ThemedText style={{ fontSize: 36 }}>🛕</ThemedText>
-              </View>
-              <View style={styles.templeCardBody}>
-                <ThemedText style={styles.templeName}>{temple.name}</ThemedText>
-                <ThemedText style={styles.templeDeity}>{temple.deity}</ThemedText>
-                <View style={styles.templeFooter}>
-                  <ThemedText style={styles.templeLocation}>📍 {temple.location}</ThemedText>
-                  <ThemedText style={styles.templeRating}>⭐ {temple.rating}</ThemedText>
-                </View>
-              </View>
-            </Pressable>
-          ))}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.hScroll}
+          contentContainerStyle={styles.hScrollContent}
+        >
+          {mandirLoading ? (
+            [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
+          ) : mandirs.length > 0 ? (
+            mandirs.slice(0, 10).map((mandir) => (
+              <MandirCard key={mandir.id} mandir={mandir} />
+            ))
+          ) : (
+            <NoDataFound label="No temples found" emoji="🛕" />
+          )}
         </ScrollView>
 
-        {/* Healing Experts */}
+        {/* Healing Experts — temporarily commented out
         <View style={styles.sectionHeaderRow}>
           <ThemedText style={styles.sectionTitleEmoji}>🧘 {t('healingExperts')}</ThemedText>
           <Pressable onPress={() => router.push('/healing')} style={({ pressed }) => [pressed && styles.pressed]}>
@@ -330,8 +564,9 @@ export default function HomeScreen() {
             </Pressable>
           ))}
         </ScrollView>
+        */}
 
-        {/* Trending Blogs */}
+        {/* Trending Blogs — temporarily commented out
         <View style={styles.sectionHeaderRow}>
           <ThemedText style={styles.sectionTitleEmoji}>📖 {t('trendingBlogs')}</ThemedText>
           <Pressable style={({ pressed }) => [pressed && styles.pressed]}>
@@ -353,27 +588,59 @@ export default function HomeScreen() {
             </Pressable>
           ))}
         </View>
+        */}
       </ScrollView>
 
       {/* ── Side Menu Modal ── */}
-      <Modal visible={sideMenuOpen} transparent animationType="none" onRequestClose={closeSideMenu} statusBarTranslucent>
+      <Modal
+        visible={sideMenuOpen}
+        transparent
+        animationType="none"
+        onRequestClose={closeSideMenu}
+        statusBarTranslucent
+      >
         <View style={{ flex: 1 }}>
           <Pressable style={styles.sideMenuBackdrop} onPress={closeSideMenu} />
-          <Animated.View style={[styles.sideMenu, { transform: [{ translateX: slideAnim }] }]}>
+          <Animated.View
+            style={[
+              styles.sideMenu,
+              { transform: [{ translateX: slideAnim }] },
+            ]}
+          >
             {/* Header */}
             <LinearGradient
               colors={[BRAND.primary, BRAND.primaryDark]}
-              start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
-              style={styles.sideMenuHeader}>
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.sideMenuHeader}
+            >
               <View style={styles.sideMenuLogo}>
-                <Image source={require('@/assets/images/logo.jpg')} style={{ width: '94%', height: '94%' }} contentFit="contain" />
+                <Image
+                  source={require("@/assets/images/logo.jpg")}
+                  style={{ width: "94%", height: "94%" }}
+                  contentFit="contain"
+                />
               </View>
               <View style={{ flex: 1 }}>
-                <ThemedText style={styles.sideMenuBrand}>Sanatan Seva Setu</ThemedText>
-                <ThemedText style={styles.sideMenuTagline}>Bridging Devotion</ThemedText>
+                <ThemedText style={styles.sideMenuBrand}>
+                  Sanatan Seva Setu
+                </ThemedText>
+                <ThemedText style={styles.sideMenuTagline}>
+                  Bridging Devotion
+                </ThemedText>
               </View>
-              <Pressable onPress={closeSideMenu} style={({ pressed }) => [styles.sideMenuClose, pressed && styles.pressed]}>
-                <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor="#FFFFFF" size={18} />
+              <Pressable
+                onPress={closeSideMenu}
+                style={({ pressed }) => [
+                  styles.sideMenuClose,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <SymbolView
+                  name={{ ios: "xmark", android: "close", web: "close" }}
+                  tintColor="#FFFFFF"
+                  size={18}
+                />
               </Pressable>
             </LinearGradient>
 
@@ -382,17 +649,35 @@ export default function HomeScreen() {
               {SIDE_MENU_ITEMS.map((item, i) => (
                 <Pressable
                   key={item.label}
-                  onPress={() => { closeSideMenu(); setTimeout(() => router.push(item.route as never), 250); }}
+                  onPress={() => {
+                    closeSideMenu();
+                    setTimeout(() => router.push(item.route as never), 250);
+                  }}
                   style={({ pressed }) => [
                     styles.sideMenuItem,
                     i > 0 && styles.sideMenuItemDivider,
                     pressed && styles.sideMenuItemPressed,
-                  ]}>
+                  ]}
+                >
                   <View style={styles.sideMenuIconBg}>
-                    <SymbolView name={item.icon} tintColor={BRAND.primary} size={18} />
+                    <SymbolView
+                      name={item.icon}
+                      tintColor={BRAND.primary}
+                      size={18}
+                    />
                   </View>
-                  <ThemedText style={styles.sideMenuItemLabel}>{item.label}</ThemedText>
-                  <SymbolView name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }} tintColor={BRAND.textSecondary} size={14} />
+                  <ThemedText style={styles.sideMenuItemLabel}>
+                    {item.label}
+                  </ThemedText>
+                  <SymbolView
+                    name={{
+                      ios: "chevron.right",
+                      android: "chevron_right",
+                      web: "chevron_right",
+                    }}
+                    tintColor={BRAND.textSecondary}
+                    size={14}
+                  />
                 </Pressable>
               ))}
             </ScrollView>
@@ -400,68 +685,114 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
-      {/* ── Dropdown overlay — rendered last so it sits on top of everything ── */}
-      {menuOpen && (
+      {/* ── Language Picker Modal ── */}
+      <Modal
+        visible={langPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLangPickerOpen(false)}
+      >
         <Pressable
-          style={styles.overlayBackdrop}
-          onPress={() => setMenuOpen(false)}
-        />
-      )}
-      {menuOpen && dropdownPos && (
-        <View style={[
-          styles.dropdownMenu, 
-          Platform.OS === 'web' 
-            ? styles.dropdownMenuWeb 
-            : { top: dropdownPos.top, right: dropdownPos.right }
-        ]}>
-          {DROPDOWN_ITEMS.map((item, i) => (
-            <Pressable
-              key={item.labelKey}
-              onPress={item.onPress}
-              style={({ pressed }) => [
-                styles.dropdownItem,
-                i < DROPDOWN_ITEMS.length - 1 && styles.dropdownItemDivider,
-                pressed && styles.pressed,
-              ]}>
-              <SymbolView name={item.icon} tintColor={item.danger ? '#DC2626' : BRAND.primary} size={16} />
-              <ThemedText style={[styles.dropdownItemText, item.danger && styles.dropdownItemDanger]}>
-                {t(item.labelKey)}
-              </ThemedText>
-            </Pressable>
-          ))}
-        </View>
-      )}
+          style={styles.langModalBackdrop}
+          onPress={() => setLangPickerOpen(false)}
+        >
+          <View style={styles.langModalBox}>
+            <ThemedText style={styles.langModalTitle}>
+              {t("chooseLanguage")}
+            </ThemedText>
+            {LANGUAGES.map((l, i) => (
+              <Pressable
+                key={l.code}
+                onPress={() => {
+                  setLang(l.code as LangCode);
+                  setLangPickerOpen(false);
+                }}
+                style={({ pressed }) => [
+                  styles.langModalRow,
+                  i < LANGUAGES.length - 1 && styles.langModalRowDivider,
+                  lang === l.code && styles.langModalRowSelected,
+                  pressed && styles.pressed,
+                ]}
+              >
+                <ThemedText
+                  style={[
+                    styles.langModalNative,
+                    lang === l.code && styles.langModalNativeSelected,
+                  ]}
+                >
+                  {l.nativeName}
+                </ThemedText>
+                <ThemedText style={styles.langModalEnglish}>
+                  {l.englishName}
+                </ThemedText>
+                {lang === l.code && (
+                  <SymbolView
+                    name={{ ios: "checkmark", android: "check", web: "check" }}
+                    tintColor={BRAND.primary}
+                    size={16}
+                  />
+                )}
+              </Pressable>
+            ))}
+          </View>
+        </Pressable>
+      </Modal>
+
     </View>
   );
 }
 
-function BannerSlider({ t }: { t: (k: TranslationKey) => string }) {
+function BannerSlider({ banners }: { banners: Banner[] }) {
+  const screenWidth = Dimensions.get("window").width;
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
   const scrollRef = useRef<ScrollView>(null);
   const indexRef = useRef(0);
   const pausedRef = useRef(false);
+  const count = banners.length;
+  const isWeb = Platform.OS === "web";
 
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!width) return;
-    const next = Math.round(e.nativeEvent.contentOffset.x / width);
-    if (next !== indexRef.current) { indexRef.current = next; setIndex(next); }
+  const effectiveWidth = width || (screenWidth - 32);
+  // 16:9 aspect ratio, capped at 320px on tablets/web
+  const bannerHeight = Math.min(Math.round(effectiveWidth * (9 / 16)), 320);
+
+  const goTo = (next: number) => {
+    indexRef.current = next;
+    setIndex(next);
+    scrollRef.current?.scrollTo({ x: next * effectiveWidth, animated: true });
   };
 
-  useEffect(() => {
-    if (!width) return;
-    const id = setInterval(() => {
-      if (pausedRef.current) return;
-      const next = (indexRef.current + 1) % BANNERS.length;
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const next = Math.round(e.nativeEvent.contentOffset.x / effectiveWidth);
+    if (next !== indexRef.current && next >= 0 && next < count) {
       indexRef.current = next;
       setIndex(next);
-      scrollRef.current?.scrollTo({ x: next * width, animated: true });
+    }
+  };
+
+  // Auto-slide every 3s on both mobile and web
+  useEffect(() => {
+    if (count < 2) return;
+    const id = setInterval(() => {
+      if (pausedRef.current) return;
+      goTo((indexRef.current + 1) % count);
     }, 3000);
     return () => clearInterval(id);
-  }, [width]);
+  }, [count, effectiveWidth]);
+
+  if (count === 0) {
+    return (
+      <View style={[styles.bannerCard, { backgroundColor: "#E0D6C2", opacity: 0.4, width: "100%", height: bannerHeight }]} />
+    );
+  }
+
+  const imgField = isWeb ? "desktop_image" : "mobile_image";
 
   return (
-    <View style={styles.bannerWrap} onLayout={e => setWidth(e.nativeEvent.layout.width)}>
+    <View
+      style={styles.bannerWrap}
+      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
+    >
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -471,72 +802,278 @@ function BannerSlider({ t }: { t: (k: TranslationKey) => string }) {
         onScrollBeginDrag={() => { pausedRef.current = true; }}
         onScrollEndDrag={() => { pausedRef.current = false; }}
         scrollEventThrottle={16}
-        snapToInterval={width || undefined}
-        decelerationRate="fast">
-        {BANNERS.map(b => (
-          <LinearGradient
-            key={b.titleKey}
-            colors={b.colors}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.bannerCard, { width: width || Dimensions.get('window').width - 32 }]}>
-            {b.showLive && (
-              <View style={styles.liveTag}>
-                <View style={styles.liveDot} />
-                <ThemedText style={styles.liveTagText}>{t('bannerLiveTag')}</ThemedText>
+        snapToInterval={effectiveWidth}
+        decelerationRate="fast"
+        scrollEnabled={!isWeb}
+        style={isWeb ? { overflow: "hidden" } : undefined}
+      >
+        {banners.map((b) => (
+          <Pressable
+            key={b.id}
+            onPress={() =>
+              router.push({ pathname: "/banner-detail", params: { id: b.id } })
+            }
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <View style={{ position: "relative" }}>
+              <Image
+                source={{ uri: `${getApiBaseUrl()}/${b[imgField]}` }}
+                style={[styles.bannerCard, { width: effectiveWidth, height: bannerHeight }]}
+                contentFit="cover"
+                contentPosition="center"
+                transition={300}
+                cachePolicy="memory-disk"
+              />
+              <View style={styles.bannerBookBtn} pointerEvents="none">
+                <ThemedText style={styles.bannerBookBtnText}>Book Now</ThemedText>
               </View>
-            )}
-            <View style={styles.bannerBottom}>
-              <View style={styles.bannerTitleRow}>
-                <View style={styles.bannerPulse} />
-                <ThemedText style={styles.bannerTitle}>{t(b.titleKey)}</ThemedText>
-              </View>
-              <ThemedText style={styles.bannerSubtitle}>{t(b.subtitleKey)}</ThemedText>
-              <Pressable style={({ pressed }) => [styles.watchBtn, pressed && styles.pressed]}>
-                <SymbolView
-                  name={{ ios: 'play.fill', android: 'play_arrow', web: 'play_arrow' }}
-                  tintColor="#FFFFFF"
-                  size={14}
-                />
-                <ThemedText style={styles.watchBtnText}>{t('watchNow')}</ThemedText>
-              </Pressable>
             </View>
-          </LinearGradient>
+          </Pressable>
         ))}
       </ScrollView>
+
+      {/* Prev / Next arrows — shown on web */}
+      {isWeb && count > 1 && (
+        <>
+          <Pressable
+            onPress={() => goTo((indexRef.current - 1 + count) % count)}
+            style={[styles.bannerArrow, styles.bannerArrowLeft]}
+          >
+            <ThemedText style={styles.bannerArrowText}>‹</ThemedText>
+          </Pressable>
+          <Pressable
+            onPress={() => goTo((indexRef.current + 1) % count)}
+            style={[styles.bannerArrow, styles.bannerArrowRight]}
+          >
+            <ThemedText style={styles.bannerArrowText}>›</ThemedText>
+          </Pressable>
+        </>
+      )}
+
       <View style={styles.dotsRow}>
-        {BANNERS.map((b, i) => (
-          <View key={b.titleKey} style={[styles.dot, i === index && styles.dotActive]} />
+        {banners.map((b, i) => (
+          <Pressable key={b.id} onPress={() => goTo(i)}>
+            <View style={[styles.dot, i === index && styles.dotActive]} />
+          </Pressable>
         ))}
       </View>
     </View>
   );
 }
 
-function LiveRow({ label, badgeText, isLive }: { label: string; badgeText: string; isLive: boolean }) {
+function LiveServiceCard({
+  item, bg, emoji,
+}: { item: Broadcast; bg: string; emoji: string }) {
+  const [title, subTitle] = useTranslatedBatch([item.title, item.sub_title]);
+  const timeStr = (() => {
+    try {
+      return new Date(item.schedule_start_time).toLocaleTimeString("en-IN", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+      });
+    } catch {
+      return "";
+    }
+  })();
+
   return (
-    <Pressable style={({ pressed }) => [styles.liveRow, pressed && styles.pressed]}>
-      <View style={[styles.liveIconBg, { backgroundColor: isLive ? '#FDE2D0' : '#FFF1DE' }]}>
-        <SymbolView
-          name={{ ios: isLive ? 'dot.radiowaves.left.and.right' : 'book.closed', android: isLive ? 'podcasts' : 'menu_book', web: isLive ? 'podcasts' : 'menu_book' }}
-          tintColor={BRAND.primary}
-          size={20}
-        />
+    <Pressable
+      onPress={() =>
+        router.push({
+          pathname: "/webinar-watch",
+          params: {
+            id: item.id,
+            title: item.title,
+            sub_title: item.sub_title,
+            is_paid: String(item.is_paid_event),
+          },
+        })
+      }
+      style={({ pressed }) => [
+        styles.liveServiceCard,
+        pressed && styles.pressed,
+      ]}
+    >
+      <View style={[styles.liveServiceImg, { backgroundColor: bg }]}>
+        {item.image_url ? (
+          <Image
+            source={{ uri: `${getApiBaseUrl()}/${item.image_url}` }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        ) : (
+          <ThemedText style={styles.liveServiceEmoji}>{emoji}</ThemedText>
+        )}
+        <View style={styles.liveServiceBadgeRow}>
+          <View style={styles.livePill}>
+            <View style={styles.liveDot} />
+            <ThemedText style={styles.livePillText}>LIVE</ThemedText>
+          </View>
+        </View>
+        {item.is_paid_event && item.event_price != null && (
+          <View style={styles.viewersBadge}>
+            <ThemedText style={styles.viewersText}>
+              ₹{item.event_price}
+            </ThemedText>
+          </View>
+        )}
       </View>
-      <ThemedText style={styles.liveLabel}>{label}</ThemedText>
-      <View style={[styles.liveBadge, { backgroundColor: isLive ? '#FDE2D0' : '#FFF1DE' }]}>
-        <ThemedText style={styles.liveBadgeText}>{badgeText}</ThemedText>
+      <ThemedText style={styles.liveServiceTitle} numberOfLines={2}>
+        {title}
+      </ThemedText>
+      <ThemedText style={styles.liveServiceLocation} numberOfLines={1}>
+        {subTitle}
+      </ThemedText>
+      {!!timeStr && (
+        <ThemedText style={styles.liveServiceTime}>{timeStr}</ThemedText>
+      )}
+      <Pressable
+        onPress={() =>
+          router.push({
+            pathname: "/webinar-watch",
+            params: {
+              id: item.id,
+              title: item.title,
+              sub_title: item.sub_title,
+              is_paid: String(item.is_paid_event),
+            },
+          })
+        }
+        style={({ pressed }) => [styles.watchBtn, pressed && styles.pressed]}
+      >
+        <ThemedText style={styles.watchBtnText}>▶ Watch</ThemedText>
+      </Pressable>
+    </Pressable>
+  );
+}
+
+function UpcomingEventCard({
+  item, bg, emoji,
+}: { item: Broadcast; bg: string; emoji: string }) {
+  const [title] = useTranslatedBatch([item.title]);
+  const dateStr = (() => {
+    try {
+      return new Date(item.schedule_start_time).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+      });
+    } catch {
+      return "";
+    }
+  })();
+
+  return (
+    <Pressable
+      style={({ pressed }) => [styles.upcomingCard, pressed && styles.pressed]}
+    >
+      <View style={[styles.upcomingImg, { backgroundColor: bg }]}>
+        {item.image_url ? (
+          <Image
+            source={{ uri: `${getApiBaseUrl()}/${item.image_url}` }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        ) : (
+          <ThemedText style={{ fontSize: 40 }}>{emoji}</ThemedText>
+        )}
+        <View
+          style={[
+            styles.upcomingBadge,
+            { backgroundColor: item.is_paid_event ? "#E8731C" : "#4CAF50" },
+          ]}
+        >
+          <ThemedText style={styles.upcomingBadgeText}>
+            {item.is_paid_event && item.event_price != null
+              ? `₹${item.event_price}`
+              : "Free"}
+          </ThemedText>
+        </View>
+      </View>
+      <View style={styles.upcomingBody}>
+        <ThemedText style={styles.upcomingTitle} numberOfLines={2}>
+          {title}
+        </ThemedText>
+        {!!dateStr && (
+          <ThemedText style={styles.upcomingDate}>📅 {dateStr}</ThemedText>
+        )}
       </View>
     </Pressable>
   );
 }
 
-function EventCard({ title, date, time }: { title: string; date: string; time: string }) {
+function MandirCard({ mandir }: { mandir: Mandir }) {
+  const [mandirName, chadhava, address] = useTranslatedBatch([
+    mandir.mandir_name,
+    mandir.chadhava_details,
+    mandir.address,
+  ]);
   return (
-    <Pressable style={({ pressed }) => [styles.eventCard, pressed && styles.pressed]}>
-      <ThemedText style={styles.eventTitle}>{title}</ThemedText>
-      <ThemedText style={styles.eventMeta}>{date}  ·  {time}</ThemedText>
+    <Pressable
+      onPress={() => router.push("/temple-search")}
+      style={({ pressed }) => [styles.templeCard, pressed && styles.pressed]}
+    >
+      <View style={styles.templeImgPlaceholder}>
+        {mandir.mandir_image_url ? (
+          <Image
+            source={{ uri: `${getApiBaseUrl()}/${mandir.mandir_image_url}` }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+          />
+        ) : (
+          <ThemedText style={{ fontSize: 36 }}>🛕</ThemedText>
+        )}
+        {mandir.is_verify && (
+          <View style={styles.templeVerifiedBadge}>
+            <ThemedText style={styles.templeVerifiedText}>✓</ThemedText>
+          </View>
+        )}
+      </View>
+      <View style={styles.templeCardBody}>
+        <ThemedText style={styles.templeName} numberOfLines={2}>{mandirName}</ThemedText>
+        {!!chadhava && (
+          <ThemedText style={styles.templeDeity} numberOfLines={1}>{chadhava}</ThemedText>
+        )}
+        <View style={styles.templeFooter}>
+          <ThemedText style={styles.templeLocation} numberOfLines={1}>📍 {address}</ThemedText>
+        </View>
+      </View>
     </Pressable>
+  );
+}
+
+function NoDataFound({ label, emoji }: { label: string; emoji: string }) {
+  return (
+    <View style={styles.noDataWrap}>
+      <ThemedText style={styles.noDataEmoji}>{emoji}</ThemedText>
+      <ThemedText style={styles.noDataText}>{label}</ThemedText>
+    </View>
+  );
+}
+
+function BroadcastSkeleton() {
+  return (
+    <View style={[styles.liveServiceCard, { opacity: 0.35 }]}>
+      <View style={[styles.liveServiceImg, { backgroundColor: "#E0D6C2" }]} />
+      <View style={{ padding: 10, gap: 6 }}>
+        <View
+          style={{
+            height: 12,
+            backgroundColor: "#E0D6C2",
+            borderRadius: 6,
+            width: "80%",
+          }}
+        />
+        <View
+          style={{
+            height: 10,
+            backgroundColor: "#E0D6C2",
+            borderRadius: 6,
+            width: "55%",
+          }}
+        />
+      </View>
+    </View>
   );
 }
 
@@ -545,168 +1082,376 @@ const styles = StyleSheet.create({
 
   header: { paddingBottom: Spacing.three },
   headerInner: { paddingHorizontal: Spacing.four, paddingTop: Spacing.two },
-  headerTop: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  headerTop: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+  },
+  brandRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    flex: 1,
+    minWidth: 0,
+  },
   brandLogo: {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
-  brandLogoImg: { width: '94%', height: '94%' },
-  welcomeText: { fontSize: 12, color: '#FFE7CF' },
-  brandText: { fontSize: 16, fontWeight: '800', color: '#FFFFFF' },
-  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  brandLogoImg: { width: "94%", height: "94%" },
+  welcomeText: { fontSize: 12, color: "#FFE7CF" },
+  brandText: { fontSize: 16, fontWeight: "800", color: "#FFFFFF" },
+  headerActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    flexShrink: 0,
+  },
   iconBtn: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  joinBtn: {
+  langIconText: { fontSize: 11, fontWeight: "800", color: "#FFFFFF" },
+
+  searchBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    height: 42,
+    marginTop: Spacing.two,
+  },
+  searchBarText: { fontSize: 13, color: BRAND.textSecondary, flex: 1 },
+
+  langModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 32,
+  },
+  langModalBox: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    width: "100%",
+    maxWidth: 320,
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowOffset: { width: 0, height: 6 },
+    shadowRadius: 16,
+    elevation: 10,
+  },
+  langModalTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: BRAND.text,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+  },
+  langModalRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    gap: 10,
+  },
+  langModalRowDivider: {
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+  },
+  langModalRowSelected: { backgroundColor: "#FFF8F0" },
+  langModalNative: {
+    fontSize: 15,
+    fontWeight: "700",
+    color: BRAND.text,
+    flex: 1,
+  },
+  langModalNativeSelected: { color: BRAND.primary },
+  langModalEnglish: { fontSize: 12, color: BRAND.textSecondary },
+  scroll: { flex: 1 },
+  scrollContent: {
+    padding: Spacing.three,
+    paddingBottom: Spacing.five,
+    gap: Spacing.three,
+  },
+
+  sectionTitle: { fontSize: 16, fontWeight: "700", color: BRAND.text },
+
+  pujaCategRow: { flexDirection: "row", gap: 8 },
+  pujaCategCard: {
+    flex: 1,
+    height: 180,
+    borderRadius: 14,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  pujaCategCardWide: {
+    width: "100%",
+    height: 180,
+    borderRadius: 14,
+    overflow: "hidden",
+    justifyContent: "flex-end",
+  },
+  pujaCategBottom: {
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    gap: 2,
+  },
+  pujaCategTitle: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
+  pujaCategSub: {
+    fontSize: 10,
+    color: "rgba(255,255,255,0.85)",
+    fontWeight: "500",
+  },
+  lokpriyaBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "#F59E0B",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  lokpriyaBadgeText: { fontSize: 11, fontWeight: "800", color: "#FFFFFF" },
+  lokpriyaBottom: {
+    flexDirection: "row",
+    alignItems: "flex-end",
+    paddingHorizontal: 10,
+    paddingBottom: 10,
+    gap: 8,
+  },
+  lokpriyaTitle: {
+    fontSize: 15,
+    fontWeight: "900",
+    color: "#FFFFFF",
+  },
+  lokpriyaSub: {
+    fontSize: 10,
+    color: "rgba(255,255,255,0.85)",
+    fontWeight: "500",
+    marginTop: 2,
+  },
+  lokpriyaBookBtn: {
+    backgroundColor: "#FFFFFF",
     paddingHorizontal: 14,
     paddingVertical: 7,
     borderRadius: 999,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    borderWidth: 1.5,
-    borderColor: '#FFFFFF',
   },
-  joinBtnText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
-  dropdownMenu: {
-    position: 'absolute',
-    backgroundColor: '#FFFFFF',
+  lokpriyaBookBtnText: { fontSize: 12, fontWeight: "800", color: BRAND.primaryDark },
+  eventsHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  viewAll: { color: BRAND.primary, fontSize: 13, fontWeight: "600" },
+
+  liveSectionTitleRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  liveDotIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#DC2626",
+  },
+
+  noDataWrap: {
+    width: 200,
+    height: 140,
+    backgroundColor: BRAND.card,
     borderRadius: 14,
     borderWidth: 1,
     borderColor: BRAND.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowOffset: { width: 0, height: 6 },
-    shadowRadius: 18,
-    elevation: 999,
-    minWidth: 220,
-    zIndex: 9999,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
   },
-  dropdownMenuWeb: {
-    top: Platform.OS === 'web' ? 70 : undefined, // Position below header on web
-    right: Platform.OS === 'web' ? 16 : undefined, // Align to right edge like mobile
-  },
-  dropdownItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 12,
-    paddingHorizontal: 16, paddingVertical: 14,
-  },
-  dropdownItemDivider: { borderBottomWidth: 1, borderBottomColor: BRAND.border },
-  dropdownItemText: { fontSize: 14, fontWeight: '600', color: BRAND.text },
-  dropdownItemDanger: { color: '#DC2626' },
-  overlayBackdrop: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    zIndex: 998,
-    backgroundColor: 'transparent',
+  noDataEmoji: { fontSize: 32 },
+  noDataText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: BRAND.textSecondary,
+    textAlign: "center",
+    paddingHorizontal: 12,
   },
 
-  searchContainer: {
-    backgroundColor: BRAND.bg,
-    paddingHorizontal: Spacing.four,
-    paddingTop: 14,
-    paddingBottom: 6,
-  },
-  searchWrap: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  liveServiceCard: {
+    width: 160,
     backgroundColor: BRAND.card,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    height: 46,
-    gap: 8,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: BRAND.border,
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 6,
-    elevation: 2,
+    overflow: "hidden",
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 14,
+  liveServiceImg: {
+    height: 110,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  liveServiceEmoji: { fontSize: 36, opacity: 0.6 },
+  liveServiceBadgeRow: { position: "absolute", top: 8, left: 8 },
+  livePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: "#DC2626",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  liveDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: "#FFFFFF" },
+  livePillText: { color: "#FFFFFF", fontSize: 9, fontWeight: "800" },
+  startingSoonPill: {
+    backgroundColor: "#F59E0B",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  startingSoonText: { color: "#FFFFFF", fontSize: 9, fontWeight: "800" },
+  viewersBadge: {
+    position: "absolute",
+    bottom: 8,
+    right: 8,
+    backgroundColor: "rgba(0,0,0,0.55)",
+    paddingHorizontal: 7,
+    paddingVertical: 3,
+    borderRadius: 999,
+  },
+  viewersText: { color: "#FFFFFF", fontSize: 10, fontWeight: "700" },
+  liveServiceTitle: {
+    fontSize: 13,
+    fontWeight: "700",
     color: BRAND.text,
-    height: '100%',
-    ...(Platform.OS === 'web' ? ({ outlineWidth: 0, outlineStyle: 'none' } as object) : null),
+    paddingHorizontal: 10,
+    paddingTop: 8,
   },
-
-  scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.three, paddingBottom: Spacing.five, gap: Spacing.three },
-
-  sectionTitle: { fontSize: 16, fontWeight: '700', color: BRAND.text },
-
-  quickGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  quickCard: {
-    width: '30%',
-    alignItems: 'center',
-    gap: 8,
+  liveServiceLocation: {
+    fontSize: 11,
+    color: BRAND.textSecondary,
+    paddingHorizontal: 10,
+    marginTop: 2,
   },
-  quickEmojiBg: {
-    width: 64, height: 64, borderRadius: 16,
-    alignItems: 'center', justifyContent: 'center',
+  liveServiceTime: {
+    fontSize: 10,
+    color: BRAND.primary,
+    paddingHorizontal: 10,
+    marginTop: 1,
+    fontWeight: "600",
   },
-  quickEmoji: { fontSize: 28 },
-  quickLabel: { fontSize: 12, fontWeight: '600', color: BRAND.text, textAlign: 'center' },
+  watchBtn: {
+    margin: 10,
+    backgroundColor: BRAND.primary,
+    borderRadius: 999,
+    paddingVertical: 7,
+    alignItems: "center",
+  },
+  watchBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
 
-  liveRow: {
-    flexDirection: 'row', alignItems: 'center',
+  upcomingCard: {
+    width: 200,
+    borderRadius: 14,
+    overflow: "hidden",
     backgroundColor: BRAND.card,
-    borderWidth: 1, borderColor: BRAND.border,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12, gap: 12,
+    borderWidth: 1,
+    borderColor: BRAND.border,
   },
-  liveIconBg: {
-    width: 40, height: 40, borderRadius: 20,
-    alignItems: 'center', justifyContent: 'center',
+  upcomingImg: {
+    width: 200,
+    height: 150,
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+    backgroundColor: "#F5EFE6",
   },
-  liveLabel: { flex: 1, fontSize: 14, fontWeight: '700', color: BRAND.text },
-  liveBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  liveBadgeText: { color: BRAND.primaryDark, fontSize: 11, fontWeight: '700' },
-
-  eventsHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  viewAll: { color: BRAND.primary, fontSize: 13, fontWeight: '600' },
-  eventCard: {
-    backgroundColor: BRAND.card,
-    borderWidth: 1, borderColor: BRAND.border,
-    borderRadius: 12, paddingHorizontal: 14, paddingVertical: 12,
+  upcomingBadge: {
+    position: "absolute",
+    top: 8,
+    right: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
   },
-  eventTitle: { fontSize: 14, fontWeight: '700', color: BRAND.text },
-  eventMeta: { fontSize: 12, color: BRAND.textSecondary, marginTop: 4 },
+  upcomingBadgeText: { color: "#FFFFFF", fontSize: 10, fontWeight: "800" },
+  upcomingBody: { padding: 10, gap: 4 },
+  upcomingTitle: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: BRAND.text,
+    lineHeight: 16,
+  },
+  upcomingDate: { fontSize: 11, color: BRAND.textSecondary },
 
   bannerWrap: { gap: 8 },
   bannerCard: {
-    height: 180, borderRadius: 16, padding: 16,
-    justifyContent: 'space-between', overflow: 'hidden',
+    borderRadius: 12,
+    overflow: "hidden",
+    backgroundColor: "#E0D6C2",
   },
-  liveTag: {
-    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 5,
-    backgroundColor: '#DC2626', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
+  bannerArrow: {
+    position: "absolute",
+    top: "50%",
+    marginTop: -20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 10,
   },
-  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
-  liveTagText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
-  bannerBottom: { gap: 8 },
-  bannerTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  bannerPulse: { width: 10, height: 10, borderRadius: 5, backgroundColor: '#FF6B6B' },
-  bannerTitle: { color: '#FFFFFF', fontSize: 18, fontWeight: '800', flexShrink: 1 },
-  bannerSubtitle: { color: 'rgba(255,255,255,0.85)', fontSize: 13 },
-  watchBtn: {
-    alignSelf: 'flex-start', flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: 'rgba(0,0,0,0.35)',
-    paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999, marginTop: 4,
+  bannerArrowLeft: { left: 10 },
+  bannerArrowRight: { right: 10 },
+  bannerArrowText: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", lineHeight: 26 },
+  bannerBookBtn: {
+    position: "absolute",
+    bottom: 12,
+    left: 12,
+    backgroundColor: BRAND.primary,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderRadius: 999,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowOffset: { width: 0, height: 2 },
+    shadowRadius: 4,
+    elevation: 4,
   },
-  watchBtnText: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E0CFB0' },
+  bannerBookBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
+  dotsRow: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 4,
+  },
+  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#E0CFB0" },
   dotActive: { width: 18, backgroundColor: BRAND.primary },
   pressed: { opacity: 0.85 },
 
-  sectionHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  sectionTitleEmoji: { fontSize: 16, fontWeight: '700', color: BRAND.text },
-  seeAll: { fontSize: 13, fontWeight: '600', color: BRAND.primary },
+  sectionHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+  },
+  sectionTitleEmoji: { fontSize: 16, fontWeight: "700", color: BRAND.text },
+  seeAll: { fontSize: 13, fontWeight: "600", color: BRAND.primary },
 
   hScroll: { marginHorizontal: -Spacing.three },
   hScrollContent: { paddingHorizontal: Spacing.three, gap: 12 },
@@ -714,103 +1459,171 @@ const styles = StyleSheet.create({
   panditCard: {
     width: 130,
     backgroundColor: BRAND.card,
-    borderWidth: 1, borderColor: BRAND.border,
+    borderWidth: 1,
+    borderColor: BRAND.border,
     borderRadius: 14,
     padding: 12,
-    alignItems: 'center',
+    alignItems: "center",
     gap: 6,
   },
   panditAvatar: {
-    width: 64, height: 64, borderRadius: 32,
-    backgroundColor: '#FFF1DE',
-    borderWidth: 2, borderColor: BRAND.primary,
-    alignItems: 'center', justifyContent: 'center',
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FFF1DE",
+    borderWidth: 2,
+    borderColor: BRAND.primary,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  panditAvatarText: { fontSize: 24, fontWeight: '800', color: BRAND.primary },
-  panditName: { fontSize: 13, fontWeight: '700', color: BRAND.text, textAlign: 'center' },
-  panditSpeciality: { fontSize: 11, color: BRAND.textSecondary, textAlign: 'center' },
-  panditRating: { fontSize: 11, fontWeight: '600', color: BRAND.primary },
+  panditAvatarText: { fontSize: 24, fontWeight: "800", color: BRAND.primary },
+  panditName: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: BRAND.text,
+    textAlign: "center",
+  },
+  panditSpeciality: {
+    fontSize: 11,
+    color: BRAND.textSecondary,
+    textAlign: "center",
+  },
+  panditRating: { fontSize: 11, fontWeight: "600", color: BRAND.primary },
 
+  templeVerifiedBadge: {
+    position: "absolute",
+    top: 6,
+    right: 6,
+    backgroundColor: "#D1FAE5",
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  templeVerifiedText: { fontSize: 10, fontWeight: "800", color: "#15803D" },
   templeCard: {
     width: 160,
     backgroundColor: BRAND.card,
-    borderWidth: 1, borderColor: BRAND.border,
+    borderWidth: 1,
+    borderColor: BRAND.border,
     borderRadius: 14,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
   templeImgPlaceholder: {
-    width: '100%', height: 90,
-    backgroundColor: '#E8F4FD',
-    alignItems: 'center', justifyContent: 'center',
+    width: "100%",
+    height: 90,
+    backgroundColor: "#E8F4FD",
+    alignItems: "center",
+    justifyContent: "center",
   },
   templeCardBody: { padding: 10, gap: 4 },
-  templeName: { fontSize: 13, fontWeight: '700', color: BRAND.text },
+  templeName: { fontSize: 13, fontWeight: "700", color: BRAND.text },
   templeDeity: { fontSize: 11, color: BRAND.textSecondary },
-  templeFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 2 },
+  templeFooter: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginTop: 2,
+  },
   templeLocation: { fontSize: 11, color: BRAND.textSecondary },
-  templeRating: { fontSize: 11, fontWeight: '700', color: BRAND.primary },
+  templeRating: { fontSize: 11, fontWeight: "700", color: BRAND.primary },
 
   blogCard: {
-    flexDirection: 'row',
+    flexDirection: "row",
     backgroundColor: BRAND.card,
-    borderWidth: 1, borderColor: BRAND.border,
-    borderRadius: 12, overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: BRAND.border,
+    borderRadius: 12,
+    overflow: "hidden",
   },
   blogThumb: {
-    width: 80, height: 80,
-    backgroundColor: '#FFF1DE',
-    alignItems: 'center', justifyContent: 'center',
+    width: 80,
+    height: 80,
+    backgroundColor: "#FFF1DE",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  blogBody: { flex: 1, padding: 12, justifyContent: 'center', gap: 6 },
+  blogBody: { flex: 1, padding: 12, justifyContent: "center", gap: 6 },
   blogTagWrap: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFF1DE',
-    paddingHorizontal: 8, paddingVertical: 3,
+    alignSelf: "flex-start",
+    backgroundColor: "#FFF1DE",
+    paddingHorizontal: 8,
+    paddingVertical: 3,
     borderRadius: 6,
   },
-  blogTag: { fontSize: 10, fontWeight: '700', color: BRAND.primary },
-  blogTitle: { fontSize: 13, fontWeight: '700', color: BRAND.text },
+  blogTag: { fontSize: 10, fontWeight: "700", color: BRAND.primary },
+  blogTitle: { fontSize: 13, fontWeight: "700", color: BRAND.text },
 
   sideMenuBackdrop: {
-    position: 'absolute', top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.45)",
   },
   sideMenu: {
-    position: 'absolute', top: 0, left: 0, bottom: 0,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    bottom: 0,
     width: 280,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#000',
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#000",
     shadowOpacity: 0.2,
     shadowOffset: { width: 4, height: 0 },
     shadowRadius: 16,
     elevation: 20,
   },
   sideMenuHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingHorizontal: 16, paddingTop: 52, paddingBottom: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingTop: 52,
+    paddingBottom: 18,
   },
   sideMenuLogo: {
-    width: 40, height: 40, borderRadius: 10,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "hidden",
   },
-  sideMenuBrand: { fontSize: 14, fontWeight: '800', color: '#FFFFFF' },
-  sideMenuTagline: { fontSize: 11, color: '#FFE7CF', marginTop: 1 },
+  sideMenuBrand: { fontSize: 14, fontWeight: "800", color: "#FFFFFF" },
+  sideMenuTagline: { fontSize: 11, color: "#FFE7CF", marginTop: 1 },
   sideMenuClose: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    alignItems: 'center', justifyContent: 'center',
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    alignItems: "center",
+    justifyContent: "center",
   },
   sideMenuItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingHorizontal: 18, paddingVertical: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 14,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
   },
   sideMenuItemDivider: { borderTopWidth: 1, borderTopColor: BRAND.border },
-  sideMenuItemPressed: { backgroundColor: '#FFF8F0' },
+  sideMenuItemPressed: { backgroundColor: "#FFF8F0" },
   sideMenuIconBg: {
-    width: 38, height: 38, borderRadius: 10,
-    backgroundColor: '#FFF1DE',
-    alignItems: 'center', justifyContent: 'center',
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    backgroundColor: "#FFF1DE",
+    alignItems: "center",
+    justifyContent: "center",
   },
-  sideMenuItemLabel: { flex: 1, fontSize: 15, fontWeight: '700', color: BRAND.text },
+  sideMenuItemLabel: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "700",
+    color: BRAND.text,
+  },
 });

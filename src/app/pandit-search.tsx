@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ApiService, type Pandit } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -135,11 +135,12 @@ export default function PanditSearchScreen() {
 
 function PanditCard({ pandit, t }: { pandit: Pandit; t: (k: any) => string }) {
   const initials = pandit.Name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
-  const specialityLabel = pandit.Specialities[0]
+  const rawSpeciality = pandit.Specialities[0]
     ? pandit.Specialities[0].SubSpecialityName
       ? `${pandit.Specialities[0].ParentCategoryName} · ${pandit.Specialities[0].SubSpecialityName}`
       : pandit.Specialities[0].ParentCategoryName
     : '—';
+  const [panditName, specialityLabel] = useTranslatedBatch([pandit.Name, rawSpeciality]);
 
   return (
     <View style={styles.card}>
@@ -149,7 +150,7 @@ function PanditCard({ pandit, t }: { pandit: Pandit; t: (k: any) => string }) {
         </View>
         <View style={{ flex: 1 }}>
           <View style={styles.nameRow}>
-            <ThemedText style={styles.panditName}>{pandit.Name}</ThemedText>
+            <ThemedText style={styles.panditName}>{panditName}</ThemedText>
             {pandit.IsVerify && (
               <View style={styles.verifiedBadge}>
                 <ThemedText style={styles.verifiedText}>✓ Verified</ThemedText>

@@ -31,7 +31,7 @@ export default function OtpVerificationScreen() {
   const params = useLocalSearchParams();
   const mobileNumber = (params.mobile as string) || '';
   const userName = (params.name as string) || '';
-  const referralCode = (params.referral as string) || null;
+  const referralCode = (params.referral === 'null' || !params.referral) ? null : (params.referral as string);
   const isLogin = params.mode === 'login';
   
   const [otp, setOtp] = useState(['', '', '', '']);
@@ -61,12 +61,22 @@ export default function OtpVerificationScreen() {
   }, [remaining]);
 
   const handleOtpChange = (value: string, index: number) => {
-    const numValue = value.replace(/\D/g, '').slice(0, 1);
+    const digits = value.replace(/\D/g, '');
+    // Handle paste: distribute digits across boxes
+    if (digits.length > 1) {
+      const newOtp = [...otp];
+      digits.split('').slice(0, 4 - index).forEach((d, i) => {
+        newOtp[index + i] = d;
+      });
+      setOtp(newOtp);
+      const nextIndex = Math.min(index + digits.length, 3);
+      otpInputRefs.current[nextIndex]?.focus();
+      return;
+    }
+    const numValue = digits.slice(0, 1);
     const newOtp = [...otp];
     newOtp[index] = numValue;
     setOtp(newOtp);
-
-    // Auto-move to next field when digit is entered
     if (numValue && index < 3) {
       otpInputRefs.current[index + 1]?.focus();
     }
@@ -78,10 +88,16 @@ export default function OtpVerificationScreen() {
     }
   };
 
-  const handleResendOtp = () => {
-    setRemaining(RESEND_SECONDS);
+  const handleResendOtp = async () => {
     setOtp(['', '', '', '']);
     otpInputRefs.current[0]?.focus();
+    setRemaining(RESEND_SECONDS);
+    try {
+      const result = await ApiService.sendOtp(mobileNumber);
+      if (!result.success) showModal('Error', result.message, 'error');
+    } catch {
+      showModal('Error', 'Failed to resend OTP. Please try again.', 'error');
+    }
   };
 
   const handleVerify = async () => {
@@ -216,7 +232,7 @@ export default function OtpVerificationScreen() {
             end={{ x: 1, y: 0 }}
             style={styles.verifyBtnGradient}>
             <ThemedText style={styles.verifyBtnText}>
-              {loading ? 'Verifying...' : `${t('verifyContinue')} →`}
+              {loading ? t('sending') : `${t('verifyContinue')} →`}
             </ThemedText>
           </LinearGradient>
         </Pressable>

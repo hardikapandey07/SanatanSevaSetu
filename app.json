@@ -3,11 +3,10 @@
     "name": "SanatanSevaSetu",
     "slug": "SanatanSevaSetu",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/logo.jpg",
     "scheme": "sanatansevasetu",
     "userInterfaceStyle": "automatic",
-
     "ios": {
       "icon": "./assets/images/logo.jpg",
       "bundleIdentifier": "com.sanatansevasetu.app",
@@ -15,7 +14,6 @@
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-
     "android": {
       "package": "com.sanatansevasetu.app",
       "usesCleartextTraffic": true,
@@ -25,16 +23,15 @@
       },
       "predictiveBackGestureEnabled": false
     },
-
     "web": {
       "output": "static",
       "favicon": "./assets/images/logo.jpg",
       "publicPath": "/"
     },
-
     "plugins": [
       "expo-router",
       "expo-image-picker",
+      "expo-video",
       [
         "expo-splash-screen",
         {
@@ -54,19 +51,20 @@
         "expo-build-properties",
         {
           "android": {
-            "buildArchs": ["arm64-v8a"],
+            "buildArchs": [
+              "arm64-v8a"
+            ],
             "enableMinifyInReleaseBuilds": true,
             "enableShrinkResourcesInReleaseBuilds": true
           }
         }
-      ]
+      ],
+      "expo-video"
     ],
-
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
     },
-
     "extra": {
       "router": {},
       "eas": {
