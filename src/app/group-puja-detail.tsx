@@ -6,10 +6,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
   Modal,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
   Platform,
   Pressable,
   ScrollView,
@@ -20,6 +17,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { RazorpayWebView } from '@/components/razorpay-webview';
 import { ThemedText } from '@/components/themed-text';
+import { ImageSlider } from '@/components/image-slider';
 import { ApiService, TokenManager, type FAQ, type InitiatePujaBookingResponse, type PujaDetail, type PujaPackageInfo, type PujaProcess } from '@/constants/api';
 import { ENV_CONFIG, getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
@@ -39,7 +37,6 @@ const BRAND = {
 };
 
 const TABS = ['About Puja', 'Benefits', 'Temple Details', 'Packages', 'Process', 'FAQs'];
-const DUMMY_DEVOTEE_EMOJIS = ['👨', '👩', '🧔', '👱', '👴', '👵', '🧑', '👦', '👧', '🧕'];
 
 /** Strip HTML tags for plain-text display */
 function stripHtml(html: string): string {
@@ -68,6 +65,9 @@ export default function GroupPujaDetailScreen() {
   const [puja, setPuja] = useState<PujaDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(0);
+  const mainScrollRef = useRef<ScrollView>(null);
+  const sectionRefs = useRef<(View | null)[]>([]);
+  const sectionOffsets = useRef<number[]>([]);
   const [processes, setProcesses] = useState<PujaProcess[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
@@ -81,10 +81,6 @@ export default function GroupPujaDetailScreen() {
   const [transactionId, setTransactionId] = useState('');
   const [devoteeName, setDevoteeName] = useState('');
   const [devoteeMobile, setDevoteeMobile] = useState('');
-  const [sliderIndex, setSliderIndex] = useState(0);
-  const sliderRef = useRef<ScrollView>(null);
-  const sliderIndexRef = useRef(0);
-  const [sliderWidth, setSliderWidth] = useState(Dimensions.get('window').width);
 
   useEffect(() => {
     if (!id) return;
@@ -97,27 +93,6 @@ export default function GroupPujaDetailScreen() {
     ApiService.getFaqs().then(setFaqs);
     ApiService.getPujaPackageInfo().then(setPkgInfoItems);
   }, [id]);
-
-  // Auto-slide image sliders
-  useEffect(() => {
-    if (!puja?.image_sliders?.length || puja.image_sliders.length < 2) return;
-    const count = puja.image_sliders.length;
-    const id = setInterval(() => {
-      const next = (sliderIndexRef.current + 1) % count;
-      sliderIndexRef.current = next;
-      setSliderIndex(next);
-      sliderRef.current?.scrollTo({ x: next * sliderWidth, animated: true });
-    }, 3000);
-    return () => clearInterval(id);
-  }, [puja?.image_sliders?.length, sliderWidth]);
-
-  const onSliderScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.round(e.nativeEvent.contentOffset.x / sliderWidth);
-    if (next !== sliderIndexRef.current) {
-      sliderIndexRef.current = next;
-      setSliderIndex(next);
-    }
-  };
 
   if (loading) {
     return (
@@ -163,46 +138,16 @@ export default function GroupPujaDetailScreen() {
         </View>
       </SafeAreaView>
 
-      <ScrollView style={styles.scroll} showsVerticalScrollIndicator={false}>
+      <ScrollView ref={mainScrollRef} style={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[4]}>
 
         {/* Image Slider */}
         {sliders.length > 0 ? (
-          <View
-            style={styles.sliderWrap}
-            onLayout={e => setSliderWidth(e.nativeEvent.layout.width)}
-          >
-            <ScrollView
-              ref={sliderRef}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={onSliderScroll}
-              scrollEventThrottle={16}
-              snapToInterval={sliderWidth}
-              decelerationRate="fast"
-            >
-              {sliders.map(s => {
-                const sliderImg = Platform.OS === 'web'
-                  ? (s.desktop_image || s.mobile_image)
-                  : (s.mobile_image || s.desktop_image);
-                return (
-                  <Image
-                    key={s.id}
-                    source={{ uri: resolveUrl(sliderImg) }}
-                    style={[styles.sliderImg, { width: sliderWidth }]}
-                    contentFit="cover"
-                  />
-                );
-              })}
-            </ScrollView>
-            {sliders.length > 1 && (
-              <View style={styles.dotsRow}>
-                {sliders.map((s, i) => (
-                  <View key={s.id} style={[styles.dot, i === sliderIndex && styles.dotActive]} />
-                ))}
-              </View>
-            )}
-          </View>
+          <ImageSlider
+            slides={sliders.map(s => ({
+              id: s.id,
+              uri: resolveUrl(Platform.OS === 'web' ? (s.desktop_image || s.mobile_image) : (s.mobile_image || s.desktop_image)),
+            }))}
+          />
         ) : mainImage ? (
           <Image source={{ uri: resolveUrl(mainImage) }} style={styles.mainImg} contentFit="cover" />
         ) : null}
@@ -241,7 +186,21 @@ export default function GroupPujaDetailScreen() {
           {puja.deities?.length > 0 && (
             <View style={styles.metaRow}>
               <ThemedText style={styles.metaIcon}>🙏</ThemedText>
-              <ThemedText style={styles.metaText}>{puja.deities.map(d => d.deity_name).join(', ')}</ThemedText>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>Deities</ThemedText>
+                <ThemedText style={styles.metaText}>{puja.deities.map(d => d.deity_name).join(', ')}</ThemedText>
+              </View>
+            </View>
+          )}
+
+          {/* Tithis */}
+          {!!puja.tithi && (
+            <View style={styles.metaRow}>
+              <ThemedText style={styles.metaIcon}>🌙</ThemedText>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>Tithi</ThemedText>
+                <ThemedText style={styles.metaText}>{puja.tithi}{puja.maas_paksh ? ` • ${puja.maas_paksh}` : ''}</ThemedText>
+              </View>
             </View>
           )}
 
@@ -249,66 +208,64 @@ export default function GroupPujaDetailScreen() {
           {puja.doshas?.length > 0 && (
             <View style={styles.metaRow}>
               <ThemedText style={styles.metaIcon}>✨</ThemedText>
-              <ThemedText style={styles.metaText}>{puja.doshas.map(d => d.dosha_name).join(', ')}</ThemedText>
-            </View>
-          )}
-        </View>
-
-        {/* Devotees */}
-        <View style={styles.section}>
-          <View style={styles.devoteesAvatars}>
-            {DUMMY_DEVOTEE_EMOJIS.map((e, i) => (
-              <View key={i} style={[styles.devoteeAvatar, { marginLeft: i === 0 ? 0 : -10 }]}>
-                <ThemedText style={{ fontSize: 14 }}>{e}</ThemedText>
+              <View style={{ flex: 1 }}>
+                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>Doshas</ThemedText>
+                <ThemedText style={styles.metaText}>{puja.doshas.map(d => d.dosha_name).join(', ')}</ThemedText>
               </View>
-            ))}
-          </View>
-          <ThemedText style={styles.devoteesText}>
-            Thousands of devotees have participated in Pujas conducted by{' '}
-            <ThemedText style={styles.devoteesCount}>Sanatan Seva Setu</ThemedText>.
-          </ThemedText>
-        </View>
-
-        {/* Tabs */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsScroll} contentContainerStyle={styles.tabsRow}>
-          {TABS.map((tab, i) => (
-            <Pressable key={tab} onPress={() => setActiveTab(i)} style={({ pressed }) => [styles.tab, pressed && styles.pressed]}>
-              <ThemedText style={[styles.tabText, activeTab === i && styles.tabTextActive]}>{tab}</ThemedText>
-              {activeTab === i && <View style={styles.tabUnderline} />}
-            </Pressable>
-          ))}
-        </ScrollView>
-
-        {/* Tab Content */}
-        <View style={styles.tabContent}>
-
-          {/* About Puja */}
-          {activeTab === 0 && (
-            <View style={{ gap: 12 }}>
-              {!!puja.about_header && (
-                <ThemedText style={styles.aboutHeader}>{puja.about_header}</ThemedText>
-              )}
-              {!!puja.about_details && (
-                <ThemedText style={styles.aboutText}>{stripHtml(puja.about_details)}</ThemedText>
-              )}
             </View>
           )}
+        </View>
 
-          {/* Benefits */}
-          {activeTab === 1 && (
-            <View style={{ gap: 14 }}>
-              {puja.benefits?.length > 0 ? puja.benefits.map(b => {
-                const benefitImgUri = Platform.OS === 'web'
-                  ? (b.desktop_image_url || b.mobile_image_url)
-                  : (b.mobile_image_url || b.desktop_image_url);
-                return (
+        {/* Devotees section removed */}
+
+        {/* Tabs — sticky wrapper */}
+        <View style={styles.tabsSticky}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
+            {TABS.map((tab, i) => (
+              <Pressable
+                key={tab}
+                onPress={() => {
+                  setActiveTab(i);
+                  const offset = sectionOffsets.current[i];
+                  if (offset !== undefined) {
+                    mainScrollRef.current?.scrollTo({ y: offset, animated: true });
+                  }
+                }}
+                style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
+              >
+                <ThemedText style={[styles.tabText, activeTab === i && styles.tabTextActive]}>{tab}</ThemedText>
+                {activeTab === i && <View style={styles.tabUnderline} />}
+              </Pressable>
+            ))}
+          </ScrollView>
+        </View>
+
+        {/* About Puja */}
+        <View
+          style={styles.tabContent}
+          ref={r => { sectionRefs.current[0] = r; }}
+          onLayout={e => { sectionOffsets.current[0] = e.nativeEvent.layout.y; }}
+        >
+          <ThemedText style={styles.sectionHeading}>About Puja</ThemedText>
+          <ExpandableText text={puja.about_header ? `${puja.about_header}\n\n${stripHtml(puja.about_details ?? '')}` : stripHtml(puja.about_details ?? '')} fallback="No details available." />
+        </View>
+
+        {/* Benefits */}
+        <View
+          style={styles.tabContent}
+          ref={r => { sectionRefs.current[1] = r; }}
+          onLayout={e => { sectionOffsets.current[1] = e.nativeEvent.layout.y; }}
+        >
+          <ThemedText style={styles.sectionHeading}>Benefits</ThemedText>
+          <View style={{ gap: 14 }}>
+            {puja.benefits?.length > 0 ? puja.benefits.map(b => {
+              const benefitImgUri = Platform.OS === 'web'
+                ? (b.desktop_image_url || b.mobile_image_url)
+                : (b.mobile_image_url || b.desktop_image_url);
+              return (
                 <View key={b.id} style={styles.benefitCard}>
                   {benefitImgUri ? (
-                    <Image
-                      source={{ uri: resolveUrl(benefitImgUri) }}
-                      style={styles.benefitImg}
-                      contentFit="cover"
-                    />
+                    <Image source={{ uri: resolveUrl(benefitImgUri) }} style={styles.benefitImg} contentFit="cover" />
                   ) : (
                     <View style={[styles.benefitImg, { backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center' }]}>
                       <ThemedText style={{ fontSize: 28 }}>✨</ThemedText>
@@ -320,85 +277,55 @@ export default function GroupPujaDetailScreen() {
                     <ThemedText style={styles.benefitDesc}>{b.description}</ThemedText>
                   </View>
                 </View>
-                );
-              }) : (
-                <ThemedText style={styles.aboutText}>No benefits listed.</ThemedText>
-              )}
-            </View>
-          )}
+              );
+            }) : <ThemedText style={styles.aboutText}>No benefits listed.</ThemedText>}
+          </View>
+        </View>
 
-          {/* Temple Details */}
-          {activeTab === 2 && (
-            <View style={{ gap: 12 }}>
-              {puja.mandir_image_url ? (
-                <Image
-                  source={{ uri: resolveUrl(puja.mandir_image_url) }}
-                  style={styles.templeImg}
-                  contentFit="cover"
-                />
-              ) : null}
-              <View style={styles.templeDetailRow}>
-                <SymbolView name={{ ios: 'building.columns', android: 'account_balance', web: 'account_balance' }} tintColor={BRAND.primary} size={16} />
-                <ThemedText style={styles.templeDetailText}>{puja.mandir_address}</ThemedText>
-              </View>
-              <View style={styles.templeDetailRow}>
-                <SymbolView name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }} tintColor={BRAND.primary} size={16} />
-                <ThemedText style={styles.templeDetailText}>{formattedDate}</ThemedText>
-              </View>
-              {!!puja.pooja_description && (
-                <ThemedText style={styles.aboutText}>{stripHtml(puja.pooja_description)}</ThemedText>
-              )}
+        {/* Temple Details */}
+        <View
+          style={styles.tabContent}
+          ref={r => { sectionRefs.current[2] = r; }}
+          onLayout={e => { sectionOffsets.current[2] = e.nativeEvent.layout.y; }}
+        >
+          <ThemedText style={styles.sectionHeading}>Temple Details</ThemedText>
+          <View style={{ gap: 12 }}>
+            {puja.mandir_image_url ? (
+              <Image source={{ uri: resolveUrl(puja.mandir_image_url) }} style={styles.templeImg} contentFit="cover" />
+            ) : null}
+            <View style={styles.templeDetailRow}>
+              <SymbolView name={{ ios: 'building.columns', android: 'account_balance', web: 'account_balance' }} tintColor={BRAND.primary} size={16} />
+              <ThemedText style={styles.templeDetailText}>{puja.mandir_address}</ThemedText>
             </View>
-          )}
-
-          {/* Process */}
-          {activeTab === 4 && (
-            <View style={{ gap: 16 }}>
-              {processes.length > 0 ? processes.map((p, i) => (
-                <View key={p.Id} style={styles.processCard}>
-                  <View style={styles.processStepBadge}>
-                    <ThemedText style={styles.processStepNum}>{p.SerialNo}</ThemedText>
-                  </View>
-                  <View style={{ flex: 1, gap: 4 }}>
-                    <ThemedText style={styles.processTitle}>{p.Title}</ThemedText>
-                    <ThemedText style={styles.processDesc}>{p.Description}</ThemedText>
-                  </View>
-                  {i < processes.length - 1 && <View style={styles.processConnector} />}
-                </View>
-              )) : (
-                <ThemedText style={styles.aboutText}>No process steps available.</ThemedText>
-              )}
+            <View style={styles.templeDetailRow}>
+              <SymbolView name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }} tintColor={BRAND.primary} size={16} />
+              <ThemedText style={styles.templeDetailText}>{formattedDate}</ThemedText>
             </View>
-          )}
+            {!!puja.pooja_description && (
+              <ExpandableText text={stripHtml(puja.pooja_description)} />
+            )}
+          </View>
+        </View>
 
-          {/* FAQs */}
-          {activeTab === 5 && (
-            <View style={{ gap: 10 }}>
-              {faqs.filter(f => f.IsActive).length > 0 ? faqs.filter(f => f.IsActive).map(f => (
-                <Pressable key={f.Id} onPress={() => setExpandedFaq(expandedFaq === f.Id ? null : f.Id)} style={({ pressed }) => [styles.faqCard, pressed && styles.pressed]}>
-                  <View style={styles.faqHeader}>
-                    <ThemedText style={styles.faqQuestion}>{f.Question}</ThemedText>
-                    <ThemedText style={styles.faqChevron}>{expandedFaq === f.Id ? '▲' : '▼'}</ThemedText>
-                  </View>
-                  {expandedFaq === f.Id && (
-                    <ThemedText style={styles.faqAnswer}>{f.Answer}</ThemedText>
-                  )}
-                </Pressable>
-              )) : (
-                <ThemedText style={styles.aboutText}>No FAQs available.</ThemedText>
-              )}
-            </View>
-          )}
-
-          {/* Packages */}
-          {activeTab === 3 && (
-            <View style={{ gap: 12 }}>
-              {puja.packages?.length > 0 ? puja.packages.map((pkg, i) => {
-                const pkgImgUri = Platform.OS === 'web'
-                  ? (pkg.desktop_image_url || pkg.mobile_image_url)
-                  : (pkg.mobile_image_url || pkg.desktop_image_url);
-                return (
-                <View key={pkg.id} style={[styles.packageCard, i === 0 && styles.packageCardHighlight]}>
+        {/* Packages */}
+        <View
+          style={styles.tabContent}
+          ref={r => { sectionRefs.current[3] = r; }}
+          onLayout={e => { sectionOffsets.current[3] = e.nativeEvent.layout.y; }}
+        >
+          <ThemedText style={styles.sectionHeading}>Packages</ThemedText>
+          <View style={{ gap: 12 }}>
+            {puja.packages?.length > 0 ? puja.packages.map((pkg, i) => {
+              const pkgImgUri = Platform.OS === 'web'
+                ? (pkg.desktop_image_url || pkg.mobile_image_url)
+                : (pkg.mobile_image_url || pkg.desktop_image_url);
+              const isSelected = selectedPkgId === pkg.id;
+              return (
+                <Pressable
+                  key={pkg.id}
+                  onPress={() => setSelectedPkgId(isSelected ? null : pkg.id)}
+                  style={({ pressed }) => [styles.packageCard, isSelected && styles.packageCardHighlight, pressed && styles.pressed]}
+                >
                   {i === 0 && (
                     <View style={styles.popularBadge}>
                       <ThemedText style={styles.popularBadgeText}>⭐ Most Popular</ThemedText>
@@ -406,11 +333,7 @@ export default function GroupPujaDetailScreen() {
                   )}
                   <View style={styles.packageTopRow}>
                     {pkgImgUri ? (
-                      <Image
-                        source={{ uri: resolveUrl(pkgImgUri) }}
-                        style={styles.packageImg}
-                        contentFit="cover"
-                      />
+                      <Image source={{ uri: resolveUrl(pkgImgUri) }} style={styles.packageImg} contentFit="cover" />
                     ) : (
                       <View style={[styles.packageImg, { backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center' }]}>
                         <ThemedText style={{ fontSize: 24 }}>🙏</ThemedText>
@@ -425,15 +348,64 @@ export default function GroupPujaDetailScreen() {
                         <ThemedText style={styles.packageDesc}>{pkg.person_count_description}</ThemedText>
                       )}
                     </View>
-                    <ThemedText style={styles.packagePrice}>₹{pkg.price.toLocaleString()}</ThemedText>
+                    <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                      <ThemedText style={styles.packagePrice}>₹{pkg.price.toLocaleString()}</ThemedText>
+                      {isSelected && (
+                        <View style={styles.pkgSelectedBadge}>
+                          <ThemedText style={styles.pkgSelectedBadgeText}>✓ Selected</ThemedText>
+                        </View>
+                      )}
+                    </View>
                   </View>
+                </Pressable>
+              );
+            }) : <ThemedText style={styles.aboutText}>No packages available.</ThemedText>}
+          </View>
+        </View>
+
+        {/* Process */}
+        <View
+          style={styles.tabContent}
+          ref={r => { sectionRefs.current[4] = r; }}
+          onLayout={e => { sectionOffsets.current[4] = e.nativeEvent.layout.y; }}
+        >
+          <ThemedText style={styles.sectionHeading}>Process</ThemedText>
+          <View style={{ gap: 16 }}>
+            {processes.length > 0 ? processes.map((p, i) => (
+              <View key={p.Id} style={styles.processCard}>
+                <View style={styles.processStepBadge}>
+                  <ThemedText style={styles.processStepNum}>{p.SerialNo}</ThemedText>
                 </View>
-                );
-              }) : (
-                <ThemedText style={styles.aboutText}>No packages available.</ThemedText>
-              )}
-            </View>
-          )}
+                <View style={{ flex: 1, gap: 4 }}>
+                  <ThemedText style={styles.processTitle}>{p.Title}</ThemedText>
+                  <ThemedText style={styles.processDesc}>{p.Description}</ThemedText>
+                </View>
+                {i < processes.length - 1 && <View style={styles.processConnector} />}
+              </View>
+            )) : <ThemedText style={styles.aboutText}>No process steps available.</ThemedText>}
+          </View>
+        </View>
+
+        {/* FAQs */}
+        <View
+          style={styles.tabContent}
+          ref={r => { sectionRefs.current[5] = r; }}
+          onLayout={e => { sectionOffsets.current[5] = e.nativeEvent.layout.y; }}
+        >
+          <ThemedText style={styles.sectionHeading}>FAQs</ThemedText>
+          <View style={{ gap: 10 }}>
+            {faqs.filter(f => f.IsActive).length > 0 ? faqs.filter(f => f.IsActive).map(f => (
+              <Pressable key={f.Id} onPress={() => setExpandedFaq(expandedFaq === f.Id ? null : f.Id)} style={({ pressed }) => [styles.faqCard, pressed && styles.pressed]}>
+                <View style={styles.faqHeader}>
+                  <ThemedText style={styles.faqQuestion}>{f.Question}</ThemedText>
+                  <ThemedText style={styles.faqChevron}>{expandedFaq === f.Id ? '▲' : '▼'}</ThemedText>
+                </View>
+                {expandedFaq === f.Id && (
+                  <ThemedText style={styles.faqAnswer}>{f.Answer}</ThemedText>
+                )}
+              </Pressable>
+            )) : <ThemedText style={styles.aboutText}>No FAQs available.</ThemedText>}
+          </View>
         </View>
 
         <View style={{ height: 100 }} />
@@ -443,87 +415,101 @@ export default function GroupPujaDetailScreen() {
       <SafeAreaView edges={['bottom']} style={styles.footer}>
         <Pressable
           onPress={() => {
-            setSelectedPkgId(puja.packages?.[0]?.id ?? null);
+            if (!selectedPkgId && puja.packages?.length) setSelectedPkgId(puja.packages[0].id);
             setPkgModalVisible(true);
           }}
           style={({ pressed }) => [styles.selectPkgBtn, pressed && styles.pressed]}
         >
           <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.selectPkgGradient}>
-            <ThemedText style={styles.selectPkgText}>Select Puja Package  →</ThemedText>
+            <ThemedText style={styles.selectPkgText}>🙏 Book This Puja</ThemedText>
           </LinearGradient>
         </Pressable>
       </SafeAreaView>
 
-      {/* Package Selection Modal */}
-      <Modal visible={pkgModalVisible} animationType="slide" transparent onRequestClose={() => setPkgModalVisible(false)}>
-        <Pressable style={styles.modalOverlay} onPress={() => setPkgModalVisible(false)} />
-        <View style={styles.modalSheet}>
-          {/* Modal Header */}
+      {/* Package Selection Modal — Book Puja Full Screen */}
+      <Modal visible={pkgModalVisible} animationType="fade" transparent onRequestClose={() => setPkgModalVisible(false)}>
+        <View style={styles.pkgModalBackdrop}>
+          <View style={styles.pkgModalContainer}>
+          {/* Header */}
           <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>All Puja Packages includes</ThemedText>
-            <Pressable onPress={() => setPkgModalVisible(false)} style={({ pressed }) => [styles.modalClose, pressed && styles.pressed]}>
-              <ThemedText style={styles.modalCloseText}>✕</ThemedText>
+            <Pressable onPress={() => setPkgModalVisible(false)} style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
+              <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor={BRAND.text} size={20} />
             </Pressable>
-          </View>
-
-          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 24 }}>
-            {/* Package Info Checklist */}
-            <View style={styles.modalSection}>
-              {pkgInfoItems.sort((a, b) => a.SerialNo - b.SerialNo).map(item => (
-                <View key={item.Id} style={styles.checkRow}>
-                  <ThemedText style={styles.checkIcon}>✓</ThemedText>
-                  <ThemedText style={styles.checkText}>{item.Description}</ThemedText>
-                </View>
-              ))}
+            <View style={{ flex: 1 }}>
+              <ThemedText style={styles.modalTitle}>Book Puja</ThemedText>
+              <ThemedText style={styles.modalSubtitle} numberOfLines={1}>{puja.title}</ThemedText>
             </View>
+          </View>
+          <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
+            {/* What's included */}
+            {pkgInfoItems.length > 0 && (
+              <View style={styles.modalSection}>
+                <ThemedText style={styles.modalSectionTitle}>✅ What's Included</ThemedText>
+                <View style={styles.checkList}>
+                  {pkgInfoItems.sort((a, b) => a.SerialNo - b.SerialNo).map(item => (
+                    <View key={item.Id} style={styles.checkRow}>
+                      <View style={styles.checkDot} />
+                      <ThemedText style={styles.checkText}>{item.Description}</ThemedText>
+                    </View>
+                  ))}
+                </View>
+              </View>
+            )}
 
-            {/* Green info banner */}
+            {/* Info banner */}
             <View style={styles.infoBanner}>
               <ThemedText style={styles.infoBannerIcon}>🎁</ThemedText>
               <ThemedText style={styles.infoBannerText}>
-                Opt for additional offerings like Vastra Daan, Anna Daan, Deep Daan, or Gau Seva in your name, available on the payments page.
+                Additional offerings like Vastra Daan, Anna Daan, Deep Daan available on payment page.
               </ThemedText>
             </View>
 
-            {/* Select Package label */}
-            <ThemedText style={styles.selectPkgLabel}>Select your puja package</ThemedText>
-
-            {/* Horizontal package cards */}
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.pkgCardsRow}>
-              {(puja.packages ?? []).map(pkg => {
-                const isSelected = selectedPkgId === pkg.id;
-                const imgUri = Platform.OS === 'web'
-                  ? (pkg.desktop_image_url || pkg.mobile_image_url)
-                  : (pkg.mobile_image_url || pkg.desktop_image_url);
-                return (
-                  <Pressable
-                    key={pkg.id}
-                    onPress={() => setSelectedPkgId(pkg.id)}
-                    style={({ pressed }) => [styles.pkgCard, isSelected && styles.pkgCardSelected, pressed && styles.pressed]}
-                  >
-                    {/* Person badge */}
-                    <View style={[styles.pkgPersonBadge, isSelected && styles.pkgPersonBadgeSelected]}>
-                      <ThemedText style={[styles.pkgPersonBadgeText, isSelected && styles.pkgPersonBadgeTextSelected]}>
-                        👤 {pkg.person_count} {pkg.person_count === 1 ? 'Person' : 'Person'}
-                      </ThemedText>
-                      {isSelected && <ThemedText style={styles.pkgCheckMark}> ✓</ThemedText>}
-                    </View>
-                    <ThemedText style={styles.pkgCardName} numberOfLines={2}>{pkg.package_title}</ThemedText>
-                    {imgUri ? (
-                      <Image source={{ uri: resolveUrl(imgUri) }} style={styles.pkgCardImg} contentFit="cover" />
-                    ) : (
-                      <View style={[styles.pkgCardImg, { backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center' }]}>
-                        <ThemedText style={{ fontSize: 28 }}>🙏</ThemedText>
+            {/* Select Package */}
+            <View style={styles.modalSection}>
+              <ThemedText style={styles.modalSectionTitle}>📌 Select Package</ThemedText>
+              <View style={{ gap: 10 }}>
+                {(puja.packages ?? []).map((pkg) => {
+                  const isSelected = selectedPkgId === pkg.id;
+                  const imgUri = Platform.OS === 'web'
+                    ? (pkg.desktop_image_url || pkg.mobile_image_url)
+                    : (pkg.mobile_image_url || pkg.desktop_image_url);
+                  return (
+                    <Pressable
+                      key={pkg.id}
+                      onPress={() => setSelectedPkgId(pkg.id)}
+                      style={({ pressed }) => [styles.pkgListCard, isSelected && styles.pkgListCardSelected, pressed && styles.pressed]}
+                    >
+                      {imgUri ? (
+                        <Image source={{ uri: resolveUrl(imgUri) }} style={styles.pkgListImg} contentFit="cover" />
+                      ) : (
+                        <View style={[styles.pkgListImg, { backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center' }]}>
+                          <ThemedText style={{ fontSize: 22 }}>🙏</ThemedText>
+                        </View>
+                      )}
+                      <View style={{ flex: 1, gap: 3 }}>
+                        <ThemedText style={[styles.pkgListName, isSelected && { color: BRAND.primary }]}>{pkg.package_title}</ThemedText>
+                        {pkg.person_count > 0 && (
+                          <ThemedText style={styles.pkgListPersons}>👥 {pkg.person_count} {pkg.person_count === 1 ? 'Person' : 'Persons'}</ThemedText>
+                        )}
+                        {!!pkg.person_count_description && (
+                          <ThemedText style={styles.pkgListDesc} numberOfLines={2}>{pkg.person_count_description}</ThemedText>
+                        )}
                       </View>
-                    )}
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+                      <View style={{ alignItems: 'flex-end', gap: 6 }}>
+                        <ThemedText style={styles.pkgListPrice}>₹{pkg.price.toLocaleString()}</ThemedText>
+                        <View style={[styles.radioOuter, isSelected && styles.radioOuterSelected]}>
+                          {isSelected && <View style={styles.radioInner} />}
+                        </View>
+                      </View>
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </View>
 
             {/* Trust badges */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trustRow}>
-              {['✅ Money Back Guarantee', '🏷️ No Hidden Cost', '🔒 ISO 27001 Certified', '🛕 Official Temple Partner'].map(t => (
+              {['✅ Money Back Guarantee', '🏷️ No Hidden Cost', '🔒 Secure Payment', '🛕 Official Temple Partner'].map(t => (
                 <View key={t} style={styles.trustBadge}>
                   <ThemedText style={styles.trustBadgeText}>{t}</ThemedText>
                 </View>
@@ -532,83 +518,79 @@ export default function GroupPujaDetailScreen() {
           </ScrollView>
 
           {/* Proceed CTA */}
+          <SafeAreaView edges={['bottom']} style={{ backgroundColor: BRAND.card }}>
           {selectedPkgId && (() => {
             const sel = puja.packages?.find(p => p.id === selectedPkgId);
             if (!sel) return null;
             return (
-              <Pressable
-                onPress={async () => {
-                  if (initiating) return;
-                  setInitiating(true);
-                  try {
-                    const profile = await TokenManager.getUserProfile();
-                    const res = await ApiService.initiatePujaBooking({
-                      puja_id: puja.id,
-                      package_id: sel.id,
-                      amount: sel.price,
-                      devotee_name: profile.name || '',
-                      mobile_number: profile.mobile || '',
-                      gotra: '',
-                      nakshatra: '',
-                      rashi: '',
-                      family_members_details: '',
-                    });
-                    if (res.success && res.data) {
-                      setDevoteeName(profile.name || '');
-                      setDevoteeMobile(profile.mobile || '');
-                      if (res.pending) {
-                        setInitiating(false);
-                        Alert.alert(
-                          'Pending Booking',
-                          'You have a pending payment for this Puja. Would you like to complete it now?',
-                          [
+              <View style={styles.modalFooter}>
+                <View style={styles.modalFooterInfo}>
+                  <ThemedText style={styles.modalFooterPrice}>₹{sel.price.toLocaleString()}</ThemedText>
+                  <ThemedText style={styles.modalFooterPkg} numberOfLines={1}>{sel.package_title}</ThemedText>
+                </View>
+                <Pressable
+                  onPress={async () => {
+                    if (initiating) return;
+                    setInitiating(true);
+                    try {
+                      const profile = await TokenManager.getUserProfile();
+                      const res = await ApiService.initiatePujaBooking({
+                        puja_id: puja.id,
+                        package_id: sel.id,
+                        amount: sel.price,
+                        devotee_name: profile.name || '',
+                        mobile_number: profile.mobile || '',
+                        gotra: '',
+                        nakshatra: '',
+                        rashi: '',
+                        family_members_details: '',
+                      });
+                      if (res.success && res.data) {
+                        setDevoteeName(profile.name || '');
+                        setDevoteeMobile(profile.mobile || '');
+                        if (res.pending) {
+                          setInitiating(false);
+                          Alert.alert('Pending Booking', 'You have a pending payment. Continue?', [
                             { text: 'Cancel', style: 'cancel' },
-                            {
-                              text: 'Continue Payment',
-                              onPress: () => {
-                                setRazorpayOrder(res.data!);
-                                setPkgModalVisible(false);
-                                setRazorpayVisible(true);
-                              },
-                            },
-                          ]
-                        );
-                        return;
+                            { text: 'Continue', onPress: () => { setRazorpayOrder(res.data!); setPkgModalVisible(false); setRazorpayVisible(true); } },
+                          ]);
+                          return;
+                        }
+                        setRazorpayOrder(res.data);
+                        setPkgModalVisible(false);
+                        setRazorpayVisible(true);
+                      } else {
+                        Alert.alert('Error', res.message || 'Failed to initiate booking.');
                       }
-                      setRazorpayOrder(res.data);
-                      setPkgModalVisible(false);
-                      setRazorpayVisible(true);
-                    } else {
-                      Alert.alert('Error', res.message || 'Failed to initiate booking.');
+                    } catch {
+                      Alert.alert('Error', 'Something went wrong.');
+                    } finally {
+                      setInitiating(false);
                     }
-                  } catch {
-                    Alert.alert('Error', 'Something went wrong. Please try again.');
-                  } finally {
-                    setInitiating(false);
-                  }
-                }}
-                disabled={initiating}
-                style={({ pressed }) => [styles.proceedBtn, pressed && styles.pressed]}
-              >
-                <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.proceedGradient}>
-                  <View>
-                    <ThemedText style={styles.proceedPrice}>₹{sel.price.toLocaleString()}</ThemedText>
-                    <ThemedText style={styles.proceedPkgName}>{sel.package_title}</ThemedText>
-                  </View>
-                  {initiating
-                    ? <ActivityIndicator color="#FFFFFF" size="small" />
-                    : <ThemedText style={styles.proceedCta}>Proceed →</ThemedText>
-                  }
-                </LinearGradient>
-              </Pressable>
+                  }}
+                  disabled={initiating}
+                  style={({ pressed }) => [styles.modalProceedBtn, pressed && styles.pressed]}
+                >
+                  <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.modalProceedGradient}>
+                    {initiating
+                      ? <ActivityIndicator color="#FFFFFF" size="small" />
+                      : <ThemedText style={styles.modalProceedText}>Pay Now →</ThemedText>
+                    }
+                  </LinearGradient>
+                </Pressable>
+              </View>
             );
           })()}
+          </SafeAreaView>
+          </View>
         </View>
       </Modal>
       {/* Razorpay WebView Modal */}
       {razorpayOrder && (
-        <Modal visible={razorpayVisible} animationType="slide" onRequestClose={() => setRazorpayVisible(false)}>
-          <SafeAreaView style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+        <Modal visible={razorpayVisible} animationType="slide" transparent onRequestClose={() => setRazorpayVisible(false)}>
+          <View style={styles.pkgModalBackdrop}>
+          <View style={styles.pkgModalContainer}>
+          <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
             <View style={styles.rzpHeader}>
               <Pressable onPress={() => setRazorpayVisible(false)} style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
                 <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.text} size={18} />
@@ -644,6 +626,8 @@ export default function GroupPujaDetailScreen() {
               }}
             />
           </SafeAreaView>
+          </View>
+          </View>
         </Modal>
       )}
 
@@ -671,6 +655,25 @@ export default function GroupPujaDetailScreen() {
           </View>
         </View>
       </Modal>
+    </View>
+  );
+}
+
+function ExpandableText({ text, fallback }: { text: string; fallback?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const LIMIT = 300;
+  const content = text?.trim() || fallback || '';
+  const isLong = content.length > LIMIT;
+  return (
+    <View>
+      <ThemedText style={styles.aboutText}>
+        {isLong && !expanded ? content.slice(0, LIMIT) + '...' : content}
+      </ThemedText>
+      {isLong && (
+        <Pressable onPress={() => setExpanded(e => !e)} style={({ pressed }) => [styles.readMoreBtn, pressed && styles.pressed]}>
+          <ThemedText style={styles.readMoreText}>{expanded ? 'Read Less ▲' : 'Read More ▼'}</ThemedText>
+        </Pressable>
+      )}
     </View>
   );
 }
@@ -739,11 +742,7 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
 
   sliderWrap: { position: 'relative' },
-  sliderImg: { height: 220 },
   mainImg: { width: '100%', height: 220 },
-  dotsRow: { flexDirection: 'row', justifyContent: 'center', gap: 6, paddingVertical: 8 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#E0CFB0' },
-  dotActive: { width: 18, backgroundColor: BRAND.primary },
 
   typePillsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: Spacing.three, paddingTop: 12, flexWrap: 'wrap' },
   typePill: { backgroundColor: '#FFF1DE', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: BRAND.border },
@@ -768,7 +767,15 @@ const styles = StyleSheet.create({
   devoteesText: { fontSize: 12, color: BRAND.textSecondary, lineHeight: 17 },
   devoteesCount: { color: BRAND.primary, fontWeight: '800' },
 
-  tabsScroll: { borderBottomWidth: 1, borderBottomColor: BRAND.border },
+  sectionHeading: { fontSize: 17, fontWeight: '900', color: BRAND.text, marginBottom: 12 },
+  pkgSelectedBadge: { backgroundColor: BRAND.green, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 3 },
+  pkgSelectedBadgeText: { fontSize: 11, fontWeight: '800', color: '#FFFFFF' },
+
+  tabsSticky: {
+    borderBottomWidth: 1,
+    borderBottomColor: BRAND.border,
+    backgroundColor: BRAND.card,
+  },
   tabsRow: { paddingHorizontal: Spacing.three, gap: 0 },
   tab: { paddingHorizontal: 14, paddingVertical: 12, position: 'relative' },
   tabText: { fontSize: 14, fontWeight: '600', color: BRAND.textSecondary },
@@ -778,6 +785,8 @@ const styles = StyleSheet.create({
   tabContent: { padding: Spacing.three },
   aboutHeader: { fontSize: 15, fontWeight: '700', color: BRAND.text, lineHeight: 22 },
   aboutText: { fontSize: 14, color: BRAND.textSecondary, lineHeight: 22 },
+  readMoreBtn: { marginTop: 8, alignSelf: 'flex-start' },
+  readMoreText: { fontSize: 13, fontWeight: '700', color: BRAND.primary },
 
   // Benefits
   benefitCard: { flexDirection: 'row', gap: 12, backgroundColor: BRAND.bgLight, borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: BRAND.border },
@@ -812,8 +821,12 @@ const styles = StyleSheet.create({
   packagePrice: { fontSize: 20, fontWeight: '900', color: BRAND.primary },
 
   footer: {
-    backgroundColor: BRAND.card, borderTopWidth: 1, borderTopColor: BRAND.border,
-    paddingHorizontal: Spacing.three, paddingTop: Spacing.two, paddingBottom: Spacing.two,
+    backgroundColor: BRAND.card,
+    borderTopWidth: 1,
+    borderTopColor: BRAND.border,
+    paddingHorizontal: Spacing.three,
+    paddingTop: Spacing.two,
+    paddingBottom: Platform.OS === 'android' ? Spacing.two : 4,
   },
   selectPkgBtn: { borderRadius: 14, overflow: 'hidden' },
   selectPkgGradient: { paddingVertical: 18, alignItems: 'center', justifyContent: 'center' },
@@ -845,33 +858,95 @@ const styles = StyleSheet.create({
   faqAnswer: { fontSize: 13, color: BRAND.textSecondary, lineHeight: 21 },
 
   // Package Modal
+  pkgModalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.85)',
+    alignItems: 'center' as const,
+    justifyContent: Platform.OS === 'web' ? 'center' as const : 'flex-end' as const,
+  },
+  pkgModalContainer: {
+    backgroundColor: BRAND.card,
+    width: '100%',
+    ...(Platform.OS === 'web' ? {
+      maxWidth: 460,
+      maxHeight: '80%' as any,
+      borderRadius: 16,
+      overflow: 'hidden' as const,
+    } : {
+      flex: 1,
+      borderTopLeftRadius: 20,
+      borderTopRightRadius: 20,
+      overflow: 'hidden' as const,
+    }),
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)' },
   modalSheet: {
     backgroundColor: BRAND.card,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    maxHeight: '88%',
-    paddingTop: 4,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    maxHeight: '90%',
     ...(Platform.OS === 'web' ? { maxWidth: 520, alignSelf: 'center' as const, width: '100%', borderRadius: 24, marginTop: 'auto' as const } : {}),
   },
+  modalHandle: { width: 40, height: 4, borderRadius: 2, backgroundColor: '#E0D6C2', alignSelf: 'center', marginTop: 10, marginBottom: 4 },
   modalHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 20, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
     borderBottomWidth: 1, borderBottomColor: BRAND.border,
   },
-  modalTitle: { fontSize: 17, fontWeight: '900', color: BRAND.text, flex: 1 },
+  modalTitle: { fontSize: 18, fontWeight: '900', color: BRAND.text },
+  modalSubtitle: { fontSize: 12, color: BRAND.textSecondary, marginTop: 2 },
   modalClose: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F0EAE0', alignItems: 'center', justifyContent: 'center' },
   modalCloseText: { fontSize: 14, fontWeight: '700', color: BRAND.text },
-  modalSection: { paddingHorizontal: 20, paddingTop: 16, gap: 12 },
+  modalSection: { paddingHorizontal: 16, paddingTop: 16, gap: 10 },
+  modalSectionTitle: { fontSize: 14, fontWeight: '800', color: BRAND.text, marginBottom: 4 },
+  checkList: { gap: 8 },
   checkRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  checkDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: BRAND.green, marginTop: 6, flexShrink: 0 },
   checkIcon: { fontSize: 15, fontWeight: '900', color: BRAND.green, marginTop: 1 },
-  checkText: { flex: 1, fontSize: 14, color: BRAND.text, lineHeight: 21 },
+  checkText: { flex: 1, fontSize: 13, color: BRAND.text, lineHeight: 20 },
   infoBanner: {
     flexDirection: 'row', gap: 10, alignItems: 'flex-start',
     backgroundColor: '#E8F5E9', borderRadius: 10,
-    marginHorizontal: 20, marginTop: 14, padding: 12,
+    marginHorizontal: 16, marginTop: 12, padding: 12,
   },
-  infoBannerIcon: { fontSize: 18 },
-  infoBannerText: { flex: 1, fontSize: 12, color: '#2E7D32', lineHeight: 18 },
+  infoBannerIcon: { fontSize: 16 },
+  infoBannerText: { flex: 1, fontSize: 12, color: '#2E7D32', lineHeight: 17 },
+
+  // Package list cards (vertical, inside modal)
+  pkgListCard: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    borderWidth: 1.5, borderColor: BRAND.border,
+    borderRadius: 14, padding: 12,
+    backgroundColor: BRAND.card,
+  },
+  pkgListCardSelected: { borderColor: BRAND.primary, backgroundColor: '#FFF8F0' },
+  pkgListImg: { width: 60, height: 60, borderRadius: 10, flexShrink: 0 },
+  pkgListName: { fontSize: 14, fontWeight: '800', color: BRAND.text },
+  pkgListPersons: { fontSize: 12, color: BRAND.textSecondary },
+  pkgListDesc: { fontSize: 11, color: BRAND.textSecondary, lineHeight: 15 },
+  pkgListPrice: { fontSize: 16, fontWeight: '900', color: BRAND.primary },
+  radioOuter: {
+    width: 20, height: 20, borderRadius: 10,
+    borderWidth: 2, borderColor: BRAND.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  radioOuterSelected: { borderColor: BRAND.primary },
+  radioInner: { width: 10, height: 10, borderRadius: 5, backgroundColor: BRAND.primary },
+
+  // Modal footer with price + pay button
+  modalFooter: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderTopWidth: 1, borderTopColor: BRAND.border,
+    backgroundColor: BRAND.card,
+  },
+  modalFooterInfo: { flex: 1 },
+  modalFooterPrice: { fontSize: 20, fontWeight: '900', color: BRAND.primary },
+  modalFooterPkg: { fontSize: 11, color: BRAND.textSecondary, marginTop: 1 },
+  modalProceedBtn: { borderRadius: 12, overflow: 'hidden', minWidth: 120 },
+  modalProceedGradient: { paddingVertical: 14, paddingHorizontal: 20, alignItems: 'center', justifyContent: 'center' },
+  modalProceedText: { fontSize: 15, fontWeight: '800', color: '#FFFFFF' },
+
   selectPkgLabel: { fontSize: 16, fontWeight: '900', color: BRAND.text, paddingHorizontal: 20, marginTop: 18, marginBottom: 12 },
   pkgCardsRow: { paddingHorizontal: 20, gap: 10 },
   pkgCard: {
@@ -890,11 +965,8 @@ const styles = StyleSheet.create({
   pkgCheckMark: { fontSize: 10, fontWeight: '900', color: '#FFFFFF' },
   pkgCardName: { fontSize: 12, fontWeight: '800', color: BRAND.text, lineHeight: 16 },
   pkgCardImg: { width: '100%', height: 80, borderRadius: 8, marginTop: 4 },
-  trustRow: { paddingHorizontal: 20, gap: 8, marginTop: 16 },
-  trustBadge: {
-    backgroundColor: '#F5F5F5', borderRadius: 999,
-    paddingHorizontal: 10, paddingVertical: 5,
-  },
+  trustRow: { paddingHorizontal: 16, gap: 8, marginTop: 12, marginBottom: 4 },
+  trustBadge: { backgroundColor: '#F5F5F5', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5 },
   trustBadgeText: { fontSize: 11, color: BRAND.textSecondary, fontWeight: '600' },
   proceedBtn: { marginHorizontal: 20, marginTop: 12, marginBottom: 8, borderRadius: 14, overflow: 'hidden' },
   proceedGradient: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingVertical: 14 },

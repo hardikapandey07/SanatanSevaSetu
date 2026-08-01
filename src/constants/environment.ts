@@ -4,7 +4,7 @@
 export const ENV_CONFIG = {
   API_BASE_URL: process.env.EXPO_PUBLIC_API_BASE_URL ?? 'https://api.sanatansevasetu.com',
   GOOGLE_TRANSLATE_API_KEY: process.env.EXPO_PUBLIC_GOOGLE_TRANSLATE_KEY ?? '',
-  RAZORPAY_KEY_ID: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? 'rzp_test_TEuOhTL51QQPXO',
+  RAZORPAY_KEY_ID: process.env.EXPO_PUBLIC_RAZORPAY_KEY_ID ?? 'rzp_live_TIpVRknVg3dRly', // rzp_test_TEuOhTL51QQPXO
   UPI_PAYEE_VPA: process.env.EXPO_PUBLIC_UPI_VPA ?? 'abhishri09@okicici',
   UPI_PAYEE_NAME: process.env.EXPO_PUBLIC_UPI_NAME ?? 'Sanatan Seva Setu',
   REQUEST_TIMEOUT: 10000,
@@ -15,4 +15,9 @@ export const ENV_CONFIG = {
 // Easy way to switch environments
 export const getApiBaseUrl = () => {
   return ENV_CONFIG.API_BASE_URL;
+};
+
+export const PUSH_CONFIG = {
+  BASE_URL: ENV_CONFIG.API_BASE_URL,
+  API_KEY: 'fcm_QbIiZoLMvhroe3nMqr5qSsUc050qwiMtiKwb4yYuvxA',
 };

@@ -14,6 +14,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { Image } from 'expo-image';
+
 import { ThemedText } from '@/components/themed-text';
 import { ApiService, type ExtraField, type PujaInfo } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
@@ -40,7 +42,7 @@ const BANNER_GRADIENTS: [string, string][] = [
 ];
 
 type PujaType = 'Individual' | 'Group' | 'Lokpriya';
-type FilterType = 'Deity' | 'Tithis' | 'Dosha';
+type FilterType = 'Deity' | 'Tithis' | 'Dosha' | 'Benefits' | 'Location';
 
 export default function GroupPujaListScreen() {
   const params = useLocalSearchParams<{ type?: string }>();
@@ -59,14 +61,83 @@ export default function GroupPujaListScreen() {
   const [loading, setLoading] = useState(true);
   const [deities, setDeities] = useState<ExtraField[]>([]);
   const [doshas, setDoshas] = useState<ExtraField[]>([]);
+  const [benefits, setBenefits] = useState<ExtraField[]>([]);
 
   // Filters
   const [search, setSearch] = useState('');
   const [selectedDeity, setSelectedDeity] = useState<ExtraField | null>(null);
   const [selectedDosha, setSelectedDosha] = useState<ExtraField | null>(null);
   const [selectedTithi, setSelectedTithi] = useState<string | null>(null);
+  const [selectedBenefit, setSelectedBenefit] = useState<ExtraField | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<string | null>(null);
 
-  // Dropdown open state
+  // Myntra-style filter panel
+  const [filterPanelOpen, setFilterPanelOpen] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<FilterType>('Deity');
+  // Draft selections (applied only on Done)
+  const [draftDeities, setDraftDeities] = useState<Set<string>>(new Set());
+  const [draftDoshas, setDraftDoshas] = useState<Set<string>>(new Set());
+  const [draftTithis, setDraftTithis] = useState<Set<string>>(new Set());
+  const [draftBenefits, setDraftBenefits] = useState<Set<string>>(new Set());
+  const [draftLocations, setDraftLocations] = useState<Set<string>>(new Set());
+
+  const openFilterPanel = () => {
+    // Sync draft from current applied filters
+    setDraftDeities(selectedDeity ? new Set([selectedDeity.id]) : new Set());
+    setDraftDoshas(selectedDosha ? new Set([selectedDosha.id]) : new Set());
+    setDraftTithis(selectedTithi ? new Set([selectedTithi]) : new Set());
+    setDraftBenefits(selectedBenefit ? new Set([selectedBenefit.id]) : new Set());
+    setDraftLocations(selectedLocation ? new Set([selectedLocation]) : new Set());
+    setActiveCategory('Deity');
+    setFilterPanelOpen(true);
+  };
+
+  const applyDraft = () => {
+    setSelectedDeity(draftDeities.size > 0 ? deities.find(d => draftDeities.has(d.id)) ?? null : null);
+    setSelectedDosha(draftDoshas.size > 0 ? doshas.find(d => draftDoshas.has(d.id)) ?? null : null);
+    setSelectedTithi(draftTithis.size > 0 ? [...draftTithis][0] : null);
+    setSelectedBenefit(draftBenefits.size > 0 ? benefits.find(b => draftBenefits.has(b.id)) ?? null : null);
+    setSelectedLocation(draftLocations.size > 0 ? [...draftLocations][0] : null);
+    setFilterPanelOpen(false);
+  };
+
+  const clearDraft = () => {
+    setDraftDeities(new Set());
+    setDraftDoshas(new Set());
+    setDraftTithis(new Set());
+    setDraftBenefits(new Set());
+    setDraftLocations(new Set());
+  };
+
+  const totalDraftCount = draftDeities.size + draftDoshas.size + draftTithis.size + draftBenefits.size + draftLocations.size;
+
+  const getDraftSet = (cat: FilterType) => {
+    if (cat === 'Deity')    return { set: draftDeities,   setFn: setDraftDeities };
+    if (cat === 'Dosha')    return { set: draftDoshas,    setFn: setDraftDoshas };
+    if (cat === 'Tithis')   return { set: draftTithis,    setFn: setDraftTithis };
+    if (cat === 'Benefits') return { set: draftBenefits,  setFn: setDraftBenefits };
+    return { set: draftLocations, setFn: setDraftLocations };
+  };
+
+  const toggleDraft = (cat: FilterType, id: string) => {
+    const { set, setFn } = getDraftSet(cat);
+    const next = new Set(set);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    setFn(next);
+  };
+
+  // Unique locations derived from loaded puja mandir_address values
+  const locationOptions = [...new Set(allPujas.map(p => p.mandir_address).filter(Boolean))];
+
+  const getCategoryOptions = (cat: FilterType): { id: string; label: string }[] => {
+    if (cat === 'Deity')    return deities.map(d => ({ id: d.id, label: d.description }));
+    if (cat === 'Dosha')    return doshas.map(d => ({ id: d.id, label: d.description }));
+    if (cat === 'Tithis')   return tithiOptions.map(t => ({ id: t, label: t }));
+    if (cat === 'Benefits') return benefits.map(b => ({ id: b.id, label: b.description }));
+    return locationOptions.map(l => ({ id: l, label: l }));
+  };
+
+  // Dropdown open state (kept for backward compat but unused now)
   const [openDropdown, setOpenDropdown] = useState<FilterType | null>(null);
 
   // Load pujas + filter options on mount
@@ -76,10 +147,12 @@ export default function GroupPujaListScreen() {
       ApiService.getPujas(pujaType),
       ApiService.getExtraFields(3),  // deities
       ApiService.getExtraFields(5),  // doshas
-    ]).then(([pujaData, deityData, doshaData]) => {
+      ApiService.getExtraFields(6),  // benefits
+    ]).then(([pujaData, deityData, doshaData, benefitData]) => {
       setAllPujas(pujaData);
       setDeities(deityData);
       setDoshas(doshaData);
+      setBenefits(benefitData);
       setLoading(false);
     });
   }, [pujaType]);
@@ -87,59 +160,72 @@ export default function GroupPujaListScreen() {
   // Unique tithis from loaded pujas
   const tithiOptions = [...new Set(allPujas.map(p => p.tithi).filter(Boolean))];
 
-  // Client-side filter (deity/dosha filtering ideally goes to API, but list response
-  // includes deities[] only in detail — so we filter by tithi client-side,
-  // and re-fetch with deity_id / dosha_id query params when selected)
   const [filteredPujas, setFilteredPujas] = useState<PujaInfo[]>([]);
   const [filterLoading, setFilterLoading] = useState(false);
 
   useEffect(() => {
-    if (!selectedDeity && !selectedDosha) {
-      // No API filter — apply tithi + search client-side
-      let result = allPujas;
-      if (selectedTithi) result = result.filter(p => p.tithi === selectedTithi);
-      if (search) result = result.filter(p =>
-        p.title.toLowerCase().includes(search.toLowerCase()) ||
-        p.mandir_address.toLowerCase().includes(search.toLowerCase())
-      );
-      setFilteredPujas(result);
+    applyFilters();
+  }, [selectedDeity, selectedDosha, selectedTithi, selectedBenefit, selectedLocation, search, allPujas]);
+
+  function applyFilters() {
+    const hasApiFilter = !!(selectedDeity || selectedDosha || selectedBenefit || selectedLocation || selectedTithi);
+
+    const clientFilter = (list: PujaInfo[]) => {
+      let result = list;
+      if (search.trim()) {
+        const q = search.toLowerCase();
+        result = result.filter(p =>
+          p.title.toLowerCase().includes(q) ||
+          p.mandir_address.toLowerCase().includes(q)
+        );
+      }
+      return result;
+    };
+
+    if (!hasApiFilter) {
+      setFilteredPujas(clientFilter([...allPujas]));
       return;
     }
-    // Re-fetch with deity/dosha filter
+
     setFilterLoading(true);
-    const params: Record<string, string> = {
-      booking_status: 'open',
-      puja_types: pujaType,
-      page: '1',
-      limit: '100',
-    };
-    if (selectedDeity) params.deity_id = selectedDeity.id;
-    if (selectedDosha) params.dosha_id = selectedDosha.id;
-    const qs = new URLSearchParams(params).toString();
-    fetch(`https://api.sanatansevasetu.com/api/v1/pujas/all?${qs}`, {
+    // Build all active API filter params together
+    const qp = new URLSearchParams();
+    qp.set('booking_status', 'open');
+    qp.set('puja_types', pujaType);
+    qp.set('page', '1');
+    qp.set('limit', '100');
+    if (selectedDeity)    qp.set('deity_names',       selectedDeity.description);
+    if (selectedDosha)    qp.set('dosha_names',       selectedDosha.description);
+    if (selectedBenefit)  qp.set('benefit_categories', selectedBenefit.description);
+    if (selectedLocation) qp.set('location',           selectedLocation);
+    if (selectedTithi)    qp.set('tithi',              selectedTithi);
+
+    fetch(`https://api.sanatansevasetu.com/api/v1/pujas/all?${qp.toString()}`, {
       headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
     })
       .then(r => r.ok ? r.json() : { data: [] })
       .then((d: any) => {
-        let result: PujaInfo[] = d.data ?? [];
-        if (selectedTithi) result = result.filter((p: PujaInfo) => p.tithi === selectedTithi);
-        if (search) result = result.filter((p: PujaInfo) =>
-          p.title.toLowerCase().includes(search.toLowerCase()) ||
-          p.mandir_address.toLowerCase().includes(search.toLowerCase())
-        );
-        setFilteredPujas(result);
+        const apiResult: PujaInfo[] = d.data ?? [];
+        // Also intersect with allPujas IDs to ensure we only show valid results
+        const allIds = new Set(allPujas.map(p => p.id));
+        const intersected = allIds.size > 0
+          ? apiResult.filter(p => allIds.has(p.id))
+          : apiResult;
+        setFilteredPujas(clientFilter(intersected));
       })
       .catch(() => setFilteredPujas([]))
       .finally(() => setFilterLoading(false));
-  }, [selectedDeity, selectedDosha, selectedTithi, search, allPujas]);
+  }
 
   const clearFilters = () => {
     setSelectedDeity(null);
     setSelectedDosha(null);
     setSelectedTithi(null);
+    setSelectedBenefit(null);
+    setSelectedLocation(null as string | null);
   };
 
-  const hasActiveFilter = !!(selectedDeity || selectedDosha || selectedTithi);
+  const hasActiveFilter = !!(selectedDeity || selectedDosha || selectedTithi || selectedBenefit || selectedLocation);
 
   return (
     <View style={styles.root}>
@@ -150,112 +236,111 @@ export default function GroupPujaListScreen() {
             <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor={BRAND.text} size={20} />
           </Pressable>
           <ThemedText style={styles.headerTitle}>{title}</ThemedText>
-          {hasActiveFilter && (
-            <Pressable onPress={clearFilters} style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
-              <ThemedText style={styles.clearBtnText}>Clear</ThemedText>
-            </Pressable>
-          )}
         </View>
 
-        {/* Search */}
-        <View style={styles.searchWrap}>
-          <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor={BRAND.textSecondary} size={16} />
-          <TextInput
-            value={search}
-            onChangeText={setSearch}
-            placeholder={`Search for ${title}`}
-            placeholderTextColor={BRAND.textSecondary}
-            style={styles.searchInput}
-            {...(Platform.OS === 'web' ? ({ outlineWidth: 0 } as object) : null)}
-          />
+        {/* Search + Filter in one row */}
+        <View style={styles.searchRow}>
+          <View style={styles.searchWrap}>
+            <SymbolView name={{ ios: 'magnifyingglass', android: 'search', web: 'search' }} tintColor={BRAND.textSecondary} size={16} />
+            <TextInput
+              value={search}
+              onChangeText={setSearch}
+              placeholder={`Search for ${title}`}
+              placeholderTextColor={BRAND.textSecondary}
+              style={styles.searchInput}
+            />
+          </View>
+          <Pressable
+            onPress={openFilterPanel}
+            style={({ pressed }) => [styles.filterBtn, hasActiveFilter && styles.filterBtnActive, pressed && styles.pressed]}
+          >
+            <SymbolView name={{ ios: 'line.3.horizontal.decrease', android: 'filter_list', web: 'filter_list' }} tintColor={hasActiveFilter ? '#FFFFFF' : BRAND.text} size={18} />
+            {hasActiveFilter && (
+              <View style={styles.filterBadge}>
+                <ThemedText style={styles.filterBadgeText}>
+                  {[selectedDeity, selectedDosha, selectedTithi, selectedBenefit, selectedLocation].filter(Boolean).length}
+                </ThemedText>
+              </View>
+            )}
+          </Pressable>
         </View>
-
-        {/* Filter chips */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.filtersRow}>
-          {/* All */}
-          <Pressable
-            onPress={clearFilters}
-            style={({ pressed }) => [styles.filterChip, !hasActiveFilter && styles.filterChipActive, pressed && styles.pressed]}
-          >
-            <SymbolView name={{ ios: 'line.3.horizontal.decrease', android: 'filter_list', web: 'filter_list' }} tintColor={!hasActiveFilter ? '#FFFFFF' : BRAND.text} size={13} />
-            <ThemedText style={[styles.filterText, !hasActiveFilter && styles.filterTextActive]}>All</ThemedText>
-          </Pressable>
-
-          {/* Deity */}
-          <Pressable
-            onPress={() => setOpenDropdown(o => o === 'Deity' ? null : 'Deity')}
-            style={({ pressed }) => [styles.filterChip, !!selectedDeity && styles.filterChipActive, pressed && styles.pressed]}
-          >
-            <ThemedText style={[styles.filterText, !!selectedDeity && styles.filterTextActive]}>
-              {selectedDeity ? selectedDeity.description : 'Deity'}
-            </ThemedText>
-            <SymbolView
-              name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-              tintColor={selectedDeity ? '#FFFFFF' : BRAND.text} size={12}
-            />
-          </Pressable>
-
-          {/* Tithis */}
-          <Pressable
-            onPress={() => setOpenDropdown(o => o === 'Tithis' ? null : 'Tithis')}
-            style={({ pressed }) => [styles.filterChip, !!selectedTithi && styles.filterChipActive, pressed && styles.pressed]}
-          >
-            <ThemedText style={[styles.filterText, !!selectedTithi && styles.filterTextActive]}>
-              {selectedTithi ?? 'Tithis'}
-            </ThemedText>
-            <SymbolView
-              name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-              tintColor={selectedTithi ? '#FFFFFF' : BRAND.text} size={12}
-            />
-          </Pressable>
-
-          {/* Dosha */}
-          <Pressable
-            onPress={() => setOpenDropdown(o => o === 'Dosha' ? null : 'Dosha')}
-            style={({ pressed }) => [styles.filterChip, !!selectedDosha && styles.filterChipActive, pressed && styles.pressed]}
-          >
-            <ThemedText style={[styles.filterText, !!selectedDosha && styles.filterTextActive]}>
-              {selectedDosha ? selectedDosha.description : 'Dosha'}
-            </ThemedText>
-            <SymbolView
-              name={{ ios: 'chevron.down', android: 'expand_more', web: 'expand_more' }}
-              tintColor={selectedDosha ? '#FFFFFF' : BRAND.text} size={12}
-            />
-          </Pressable>
-        </ScrollView>
       </SafeAreaView>
 
-      {/* Dropdown modals */}
-      <DropdownModal
-        visible={openDropdown === 'Deity'}
-        title="Select Deity"
-        options={deities.map(d => ({ id: d.id, label: d.description }))}
-        selected={selectedDeity?.id ?? null}
-        onSelect={id => {
-          setSelectedDeity(deities.find(d => d.id === id) ?? null);
-          setOpenDropdown(null);
-        }}
-        onClose={() => setOpenDropdown(null)}
-      />
-      <DropdownModal
-        visible={openDropdown === 'Tithis'}
-        title="Select Tithi"
-        options={tithiOptions.map(t => ({ id: t, label: t }))}
-        selected={selectedTithi}
-        onSelect={id => { setSelectedTithi(id); setOpenDropdown(null); }}
-        onClose={() => setOpenDropdown(null)}
-      />
-      <DropdownModal
-        visible={openDropdown === 'Dosha'}
-        title="Select Dosha"
-        options={doshas.map(d => ({ id: d.id, label: d.description }))}
-        selected={selectedDosha?.id ?? null}
-        onSelect={id => {
-          setSelectedDosha(doshas.find(d => d.id === id) ?? null);
-          setOpenDropdown(null);
-        }}
-        onClose={() => setOpenDropdown(null)}
-      />
+      {/* Myntra-style Filter Panel */}
+      <Modal visible={filterPanelOpen} transparent animationType="fade" onRequestClose={() => setFilterPanelOpen(false)}>
+        <View style={styles.fpBackdrop}>
+          <View style={styles.fpContainer}>
+            {/* Header */}
+            <View style={styles.fpHeader}>
+              <ThemedText style={styles.fpHeaderTitle}>Filters</ThemedText>
+              <Pressable onPress={() => setFilterPanelOpen(false)} style={({ pressed }) => [styles.fpCloseBtn, pressed && styles.pressed]}>
+                <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.textSecondary} size={16} />
+              </Pressable>
+            </View>
+
+            <View style={styles.fpBody}>
+              {/* Left: category list */}
+              <View style={styles.fpLeft}>
+                {(['Deity', 'Tithis', 'Dosha', 'Benefits', 'Location'] as FilterType[]).map(cat => {
+                  const count = getDraftSet(cat).set.size;
+                  const isActive = activeCategory === cat;
+                  return (
+                    <Pressable
+                      key={cat}
+                      onPress={() => setActiveCategory(cat)}
+                      style={[styles.fpCatItem, isActive && styles.fpCatItemActive]}
+                    >
+                      <ThemedText style={[styles.fpCatText, isActive && styles.fpCatTextActive]}>{cat}</ThemedText>
+                      {count > 0 && (
+                        <View style={styles.fpCatBadge}>
+                          <ThemedText style={styles.fpCatBadgeText}>{count}</ThemedText>
+                        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+
+              {/* Right: options with checkboxes */}
+              <ScrollView style={styles.fpRight} showsVerticalScrollIndicator={false}>
+                {getCategoryOptions(activeCategory).map((opt, i) => {
+                  const checked = getDraftSet(activeCategory).set.has(opt.id);
+                  return (
+                    <Pressable
+                      key={opt.id}
+                      onPress={() => toggleDraft(activeCategory, opt.id)}
+                      style={({ pressed }) => [
+                        styles.fpOptionRow,
+                        i > 0 && styles.fpOptionDivider,
+                        pressed && styles.pressed,
+                      ]}
+                    >
+                      <View style={[styles.fpCheckbox, checked && styles.fpCheckboxChecked]}>
+                        {checked && <ThemedText style={styles.fpCheckmark}>✓</ThemedText>}
+                      </View>
+                      <ThemedText style={[styles.fpOptionText, checked && styles.fpOptionTextChecked]}>
+                        {opt.label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </ScrollView>
+            </View>
+
+            {/* Footer */}
+            <View style={styles.fpFooter}>
+              <Pressable onPress={clearDraft} style={({ pressed }) => [styles.fpClearBtn, pressed && styles.pressed]}>
+                <ThemedText style={styles.fpClearBtnText}>Clear All</ThemedText>
+              </Pressable>
+              <Pressable onPress={applyDraft} style={({ pressed }) => [styles.fpDoneBtn, pressed && styles.pressed]}>
+                <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.fpDoneGradient}>
+                  <ThemedText style={styles.fpDoneText}>Done{totalDraftCount > 0 ? ` (${totalDraftCount})` : ''}</ThemedText>
+                </LinearGradient>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* List */}
       {loading || filterLoading ? (
@@ -263,7 +348,14 @@ export default function GroupPujaListScreen() {
       ) : filteredPujas.length === 0 ? (
         <View style={styles.emptyWrap}>
           <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
-          <ThemedText style={styles.emptyText}>No pujas found</ThemedText>
+          <ThemedText style={styles.emptyText}>
+            {hasActiveFilter ? 'No pujas match this filter' : 'No pujas found'}
+          </ThemedText>
+          {hasActiveFilter && (
+            <Pressable onPress={clearFilters} style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
+              <ThemedText style={styles.clearBtnText}>Clear Filters</ThemedText>
+            </Pressable>
+          )}
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
@@ -276,57 +368,12 @@ export default function GroupPujaListScreen() {
   );
 }
 
-// ── Dropdown Modal ────────────────────────────────────────────────────────────
-function DropdownModal({
-  visible, title, options, selected, onSelect, onClose,
-}: {
-  visible: boolean;
-  title: string;
-  options: { id: string; label: string }[];
-  selected: string | null;
-  onSelect: (id: string) => void;
-  onClose: () => void;
-}) {
-  return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.modalBackdrop} onPress={onClose}>
-        <View style={styles.modalBox}>
-          <View style={styles.modalHeader}>
-            <ThemedText style={styles.modalTitle}>{title}</ThemedText>
-            <Pressable onPress={onClose} style={({ pressed }) => [pressed && styles.pressed]}>
-              <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.textSecondary} size={16} />
-            </Pressable>
-          </View>
-          <ScrollView style={{ maxHeight: 320 }} showsVerticalScrollIndicator={false}>
-            {options.map((opt, i) => (
-              <Pressable
-                key={opt.id}
-                onPress={() => onSelect(opt.id)}
-                style={({ pressed }) => [
-                  styles.modalRow,
-                  i < options.length - 1 && styles.modalRowDivider,
-                  selected === opt.id && styles.modalRowSelected,
-                  pressed && styles.pressed,
-                ]}
-              >
-                <ThemedText style={[styles.modalRowText, selected === opt.id && styles.modalRowTextSelected]}>
-                  {opt.label}
-                </ThemedText>
-                {selected === opt.id && (
-                  <SymbolView name={{ ios: 'checkmark', android: 'check', web: 'check' }} tintColor={BRAND.primary} size={14} />
-                )}
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-      </Pressable>
-    </Modal>
-  );
-}
-
 // ── Puja Card ─────────────────────────────────────────────────────────────────
 function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: number }) {
   const gradient = BANNER_GRADIENTS[gradientIndex % BANNER_GRADIENTS.length];
+  const imgUri = Platform.OS === 'web'
+    ? (puja.desktop_image || puja.mobile_image)
+    : (puja.mobile_image || puja.desktop_image);
 
   const formattedDate = (() => {
     try { return new Date(puja.puja_date).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' }); }
@@ -335,11 +382,14 @@ function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: numb
 
   return (
     <View style={styles.card}>
-      <LinearGradient colors={gradient} style={styles.banner}>
+      {/* Banner image */}
+      <View style={styles.banner}>
+        <LinearGradient colors={gradient} style={StyleSheet.absoluteFill} />
+        {imgUri && (
+          <Image source={{ uri: imgUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
+        )}
+        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.38)' }]} />
         <View style={styles.bannerContent}>
-          <View style={styles.bannerTagBg}>
-            <ThemedText style={styles.bannerTag}>🔱 {puja.maas_paksh} • {puja.tithi}</ThemedText>
-          </View>
           <ThemedText style={styles.bannerTitle} numberOfLines={3}>{puja.title}</ThemedText>
           <View style={styles.typePillsRow}>
             {(puja.puja_types ?? []).map(tp => (
@@ -349,16 +399,16 @@ function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: numb
             ))}
           </View>
         </View>
-        <View style={styles.bannerAvatarWrap}>
-          <ThemedText style={styles.bannerAvatar}>🛕</ThemedText>
-        </View>
-      </LinearGradient>
+      </View>
 
       <View style={styles.subtitleTagRow}>
         <ThemedText style={styles.subtitleTag}>{puja.subtitle}</ThemedText>
       </View>
 
       <View style={styles.cardBody}>
+        <View style={styles.tithiRow}>
+          <ThemedText style={styles.tithiTag}>🔱 {puja.maas_paksh} • {puja.tithi}</ThemedText>
+        </View>
         <ThemedText style={styles.cardTitle}>{puja.title}</ThemedText>
         <ThemedText style={styles.cardDesc}>{puja.description}</ThemedText>
         <View style={styles.metaRow}>
@@ -378,9 +428,7 @@ function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: numb
         <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.participateBtnGradient}>
           <ThemedText style={styles.participateBtnText}>PARTICIPATE  ›</ThemedText>
         </LinearGradient>
-        <View style={styles.participatePanditAvatar}>
-          <ThemedText style={{ fontSize: 22 }}>🛕</ThemedText>
-        </View>
+
       </Pressable>
     </View>
   );
@@ -395,36 +443,120 @@ const styles = StyleSheet.create({
   clearBtn: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999, backgroundColor: '#FFF1DE', borderWidth: 1, borderColor: BRAND.primary },
   clearBtnText: { fontSize: 12, fontWeight: '700', color: BRAND.primary },
 
+  searchRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginHorizontal: Spacing.three,
+    marginBottom: Spacing.two,
+  },
   searchWrap: {
+    flex: 1,
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: '#F5F0E8', borderRadius: 12,
     paddingHorizontal: 14, height: 42,
-    marginHorizontal: Spacing.three, marginBottom: Spacing.two,
   },
-  searchInput: { flex: 1, fontSize: 14, color: BRAND.text },
-
-  filtersRow: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.two, gap: 8 },
-  filterChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    borderWidth: 1, borderColor: BRAND.border,
-    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 7,
-    backgroundColor: BRAND.card,
+  searchInput: {
+    flex: 1, fontSize: 14, color: BRAND.text,
+    ...(Platform.OS === 'web' ? { outlineWidth: 0, outlineStyle: 'none' } as any : {}),
   },
-  filterChipActive: { backgroundColor: BRAND.text, borderColor: BRAND.text },
-  filterText: { fontSize: 13, fontWeight: '600', color: BRAND.text },
-  filterTextActive: { color: '#FFFFFF' },
+  filterBtn: {
+    width: 42, height: 42, borderRadius: 12,
+    backgroundColor: '#F5F0E8',
+    alignItems: 'center', justifyContent: 'center',
+    position: 'relative',
+  },
+  filterBtnActive: { backgroundColor: BRAND.primary },
+  filterBadge: {
+    position: 'absolute', top: -4, right: -4,
+    width: 16, height: 16, borderRadius: 8,
+    backgroundColor: BRAND.primaryDark,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  filterBadgeText: { fontSize: 9, fontWeight: '800', color: '#FFFFFF' },
   pressed: { opacity: 0.85 },
 
-  // Dropdown modal
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'center', paddingHorizontal: 24 },
-  modalBox: { backgroundColor: '#FFFFFF', borderRadius: 16, overflow: 'hidden', shadowColor: '#000', shadowOpacity: 0.15, shadowOffset: { width: 0, height: 6 }, shadowRadius: 16, elevation: 10 },
-  modalHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: BRAND.border },
-  modalTitle: { fontSize: 15, fontWeight: '800', color: BRAND.text },
-  modalRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 18, paddingVertical: 14 },
-  modalRowDivider: { borderBottomWidth: 1, borderBottomColor: BRAND.border },
-  modalRowSelected: { backgroundColor: '#FFF8F0' },
-  modalRowText: { fontSize: 14, fontWeight: '500', color: BRAND.text },
-  modalRowTextSelected: { color: BRAND.primary, fontWeight: '700' },
+  // Myntra Filter Panel
+  fpBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  fpContainer: {
+    backgroundColor: BRAND.card,
+    borderRadius: 16,
+    overflow: 'hidden',
+    width: '100%',
+    maxWidth: 500,
+    height: '75%',
+  },
+  fpHeader: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14,
+    borderBottomWidth: 1, borderBottomColor: BRAND.border,
+  },
+  fpHeaderTitle: { fontSize: 16, fontWeight: '800', color: BRAND.text },
+  fpCloseBtn: {
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: '#F3EAD7', alignItems: 'center', justifyContent: 'center',
+  },
+  fpBody: { flex: 1, flexDirection: 'row', minHeight: 0 },
+  fpLeft: {
+    width: 110,
+    backgroundColor: '#F7F4EE',
+    borderRightWidth: 1,
+    borderRightColor: BRAND.border,
+  },
+  fpCatItem: {
+    paddingHorizontal: 14, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderLeftWidth: 3, borderLeftColor: 'transparent',
+  },
+  fpCatItemActive: {
+    backgroundColor: BRAND.card,
+    borderLeftColor: BRAND.primary,
+  },
+  fpCatText: { fontSize: 13, fontWeight: '600', color: BRAND.textSecondary },
+  fpCatTextActive: { color: BRAND.primary, fontWeight: '800' },
+  fpCatBadge: {
+    width: 18, height: 18, borderRadius: 9,
+    backgroundColor: BRAND.primary,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  fpCatBadgeText: { fontSize: 10, fontWeight: '800', color: '#FFFFFF' },
+  fpRight: { flex: 1 },
+  fpOptionRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 14,
+  },
+  fpOptionDivider: { borderTopWidth: 1, borderTopColor: '#F3EAD7' },
+  fpCheckbox: {
+    width: 20, height: 20, borderRadius: 4,
+    borderWidth: 2, borderColor: BRAND.border,
+    alignItems: 'center', justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  fpCheckboxChecked: { backgroundColor: BRAND.primary, borderColor: BRAND.primary },
+  fpCheckmark: { fontSize: 12, fontWeight: '900', color: '#FFFFFF', lineHeight: 14 },
+  fpOptionText: { flex: 1, fontSize: 13, fontWeight: '500', color: BRAND.text },
+  fpOptionTextChecked: { fontWeight: '700', color: BRAND.primary },
+  fpFooter: {
+    flexDirection: 'row', gap: 12,
+    paddingHorizontal: 16, paddingVertical: 12,
+    borderTopWidth: 1, borderTopColor: BRAND.border,
+    backgroundColor: BRAND.card,
+  },
+  fpClearBtn: {
+    flex: 1, paddingVertical: 11, borderRadius: 12,
+    borderWidth: 1.5, borderColor: BRAND.border,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  fpClearBtnText: { fontSize: 13, fontWeight: '700', color: BRAND.textSecondary },
+  fpDoneBtn: { flex: 1, borderRadius: 12, overflow: 'hidden' },
+  fpDoneGradient: { paddingVertical: 11, alignItems: 'center', justifyContent: 'center' },
+  fpDoneText: { fontSize: 13, fontWeight: '800', color: '#FFFFFF' },
 
   emptyWrap: { alignItems: 'center', paddingTop: 60, gap: 12 },
   emptyEmoji: { fontSize: 48 },
@@ -434,16 +566,22 @@ const styles = StyleSheet.create({
   scrollContent: { padding: Spacing.three, gap: Spacing.three, paddingBottom: 40 },
 
   card: { backgroundColor: BRAND.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: BRAND.border },
-  banner: { flexDirection: 'row', padding: 16, minHeight: 140, alignItems: 'center' },
-  bannerContent: { flex: 1, gap: 8 },
-  bannerTagBg: { backgroundColor: 'rgba(255,255,255,0.15)', alignSelf: 'flex-start', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 },
-  bannerTag: { fontSize: 10, fontWeight: '800', color: '#FFD700', letterSpacing: 0.5 },
+  banner: {
+    height: 160,
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
+    backgroundColor: '#1A1A2E',
+  },
+  bannerContent: {
+    padding: 12,
+    gap: 6,
+  },
   bannerTitle: { fontSize: 13, fontWeight: '800', color: '#FFFFFF', lineHeight: 18 },
   typePillsRow: { flexDirection: 'row', gap: 6, flexWrap: 'wrap' },
   typePill: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 999, paddingHorizontal: 8, paddingVertical: 3 },
   typePillText: { fontSize: 10, fontWeight: '700', color: '#FFFFFF' },
-  bannerAvatarWrap: { width: 80, height: 80, borderRadius: 40, backgroundColor: 'rgba(255,255,255,0.15)', alignItems: 'center', justifyContent: 'center', marginLeft: 10 },
-  bannerAvatar: { fontSize: 40 },
+  tithiRow: { paddingHorizontal: 12, paddingTop: 10 },
+  tithiTag: { fontSize: 12, fontWeight: '700', color: BRAND.primary },
 
   subtitleTagRow: { paddingHorizontal: 12, paddingTop: 10 },
   subtitleTag: { fontSize: 12, fontWeight: '700', color: BRAND.pink },

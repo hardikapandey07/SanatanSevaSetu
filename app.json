@@ -17,6 +17,7 @@
     "android": {
       "package": "com.sanatansevasetu.app",
       "usesCleartextTraffic": true,
+      "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#FFF6E9",
         "foregroundImage": "./assets/images/logo.jpg"
@@ -32,6 +33,13 @@
       "expo-router",
       "expo-image-picker",
       "expo-video",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/logo1.jpg",
+          "color": "#E8731C"
+        }
+      ],
       [
         "expo-splash-screen",
         {

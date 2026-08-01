@@ -3,6 +3,7 @@ import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -16,7 +17,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { ApiService, TokenManager } from '@/constants/api';
+import { ApiService, TokenManager, type UserBooking } from '@/constants/api';
+import { unregisterForPush } from '@/constants/push';
 import { useT } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/translations';
 
@@ -29,38 +31,46 @@ const BRAND = {
   inputBorder: '#E5DCC8',
   text: '#1F1A14',
   textSecondary: '#6B6258',
-  upcomingBg: '#FFF1DE',
-  upcomingText: '#C95A0E',
+  pendingBg: '#FFF1DE',
+  pendingText: '#C95A0E',
   completedBg: '#D5F1DE',
   completedText: '#15803D',
+  failedBg: '#FEE2E2',
+  failedText: '#DC2626',
   logoutColor: '#DC2626',
   disabledBg: '#CFC4B0',
 };
 
-type Booking = { title: string; pandit: string; date: string; status: 'upcoming' | 'completed' };
-const BOOKINGS: Booking[] = [
-  { title: 'Satyanarayan Puja',  pandit: 'Pt. Ramesh Sharma', date: 'Aug 28, 2025', status: 'completed' },
-  { title: 'Grihapravesh',       pandit: 'Pt. Suresh Joshi',  date: 'Sep 15, 2025', status: 'upcoming'  },
-  { title: 'Vastu Shastra Puja', pandit: 'Pt. Hari Prasad',   date: 'Oct 3, 2025',  status: 'upcoming'  },
-];
+function bookingStatusStyle(status: string) {
+  const s = status.toUpperCase();
+  if (s === 'COMPLETED' || s === 'SUCCESS') return { bg: BRAND.completedBg, text: BRAND.completedText };
+  if (s === 'FAILED' || s === 'CANCELLED') return { bg: BRAND.failedBg, text: BRAND.failedText };
+  return { bg: BRAND.pendingBg, text: BRAND.pendingText };
+}
+
+function formatBookingDate(iso: string) {
+  try { return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' }); }
+  catch { return iso; }
+}
 
 type MenuRow = { labelKey: TranslationKey; icon: { ios: string; android: string; web: string }; route?: string };
 const MENU: MenuRow[] = [
   { labelKey: 'languageSettings', icon: { ios: 'character.bubble', android: 'translate',     web: 'translate'     } },
   { labelKey: 'suggestions',      icon: { ios: 'bubble.left.fill', android: 'chat',          web: 'chat'          }, route: '/suggestion'       },
   { labelKey: 'notifications',    icon: { ios: 'bell.fill',        android: 'notifications', web: 'notifications' }, route: '/notifications'    },
-  { labelKey: 'myBookings',       icon: { ios: 'calendar',         android: 'event',         web: 'event'         }, route: '/my-bookings'      },
 ];
 
 export default function ProfileScreen() {
   const t = useT();
 
-  // Profile data
+  // Profile + bookings data
   const [userName, setUserName]   = useState('');
   const [userMobile, setUserMobile] = useState('');
   const [address, setAddress]     = useState('');
   const [email, setEmail]         = useState('');
   const [loading, setLoading]     = useState(true);
+  const [bookings, setBookings]   = useState<UserBooking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
 
   // Edit modal
   const [editVisible, setEditVisible] = useState(false);
@@ -71,6 +81,10 @@ export default function ProfileScreen() {
 
   useEffect(() => {
     loadProfile();
+    ApiService.getMyBookings().then(data => {
+      setBookings(data);
+      setBookingsLoading(false);
+    });
   }, []);
 
   const loadProfile = async () => {
@@ -177,22 +191,57 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}>
 
         {/* My Bookings */}
-        <ThemedText style={styles.sectionTitle}>{t('myBookings')}</ThemedText>
-        <View style={styles.card}>
-          {BOOKINGS.map((b, i) => (
-            <View key={b.title} style={[styles.bookingRow, i < BOOKINGS.length - 1 && styles.divider]}>
-              <View style={{ flex: 1 }}>
-                <ThemedText style={styles.bookingTitle}>{b.title}</ThemedText>
-                <ThemedText style={styles.bookingMeta}>{b.pandit} · {b.date}</ThemedText>
-              </View>
-              <View style={[styles.statusBadge, b.status === 'completed' ? styles.statusCompleted : styles.statusUpcoming]}>
-                <ThemedText style={[styles.statusText, b.status === 'completed' ? styles.statusCompletedText : styles.statusUpcomingText]}>
-                  {b.status === 'completed' ? t('completed') : t('upcoming')}
-                </ThemedText>
-              </View>
-            </View>
-          ))}
+        <View style={styles.bookingsSectionHeader}>
+          <ThemedText style={styles.sectionTitle}>{t('myBookings')}</ThemedText>
         </View>
+        <View style={styles.card}>
+          {bookingsLoading ? (
+            <ActivityIndicator size="small" color={BRAND.primary} style={{ margin: 20 }} />
+          ) : bookings.length === 0 ? (
+            <View style={styles.emptyBookings}>
+              <ThemedText style={styles.emptyBookingsEmoji}>🙏</ThemedText>
+              <ThemedText style={styles.emptyBookingsText}>No bookings yet</ThemedText>
+            </View>
+          ) : (
+            bookings.slice(0, 3).map((b, i) => {
+              const st = bookingStatusStyle(b.status);
+              return (
+                <View key={b.id} style={[styles.bookingRow, i < Math.min(bookings.length, 3) - 1 && styles.divider]}>
+                  <View style={{ flex: 1, gap: 3 }}>
+                    <ThemedText style={styles.bookingTitle} numberOfLines={2}>{b.title}</ThemedText>
+                    <View style={styles.bookingMetaRow}>
+                      <ThemedText style={styles.bookingMeta}>{b.booking_type}</ThemedText>
+                      <View style={styles.datePill}>
+                        <ThemedText style={styles.datePillText}>📅 {formatBookingDate(b.booking_date)}</ThemedText>
+                      </View>
+                    </View>
+                    <ThemedText style={styles.bookingAmount}>₹{b.amount.toLocaleString('en-IN')}</ThemedText>
+                  </View>
+                  <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
+                    <ThemedText style={[styles.statusText, { color: st.text }]}>{b.status}</ThemedText>
+                  </View>
+                </View>
+              );
+            })
+          )}
+        </View>
+        {!bookingsLoading && bookings.length > 0 && (
+          <Pressable
+            onPress={() => router.push('/my-bookings')}
+            style={({ pressed }) => [styles.viewAllBtn, pressed && styles.pressed]}>
+            <SymbolView
+              name={{ ios: 'calendar', android: 'event', web: 'event' }}
+              tintColor={BRAND.primary}
+              size={16}
+            />
+            <ThemedText style={styles.viewAllBtnText}>View All Bookings</ThemedText>
+            <SymbolView
+              name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
+              tintColor={BRAND.primary}
+              size={14}
+            />
+          </Pressable>
+        )}
 
         {/* Menu */}
         <View style={styles.card}>
@@ -223,7 +272,7 @@ export default function ProfileScreen() {
 
         {/* Logout */}
         <Pressable
-          onPress={async () => { await TokenManager.clearToken(); router.replace('/'); }}
+          onPress={async () => { await unregisterForPush(); await TokenManager.clearToken(); router.replace('/'); }}
           style={({ pressed }) => [styles.logoutBtn, pressed && styles.pressed]}>
           <SymbolView
             name={{ ios: 'rectangle.portrait.and.arrow.right', android: 'logout', web: 'logout' }}
@@ -361,20 +410,40 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   scrollContent: { padding: Spacing.three, paddingBottom: Spacing.five, gap: Spacing.three },
 
+  bookingsSectionHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sectionTitle: { fontSize: 16, fontWeight: '700', color: BRAND.text },
 
   card: { backgroundColor: BRAND.card, borderWidth: 1, borderColor: BRAND.border, borderRadius: 14, overflow: 'hidden' },
   divider: { borderBottomWidth: 1, borderBottomColor: BRAND.border },
 
+  emptyBookings: { alignItems: 'center', paddingVertical: 24, gap: 8 },
+  emptyBookingsEmoji: { fontSize: 32 },
+  emptyBookingsText: { fontSize: 13, color: BRAND.textSecondary, fontWeight: '600' },
+
   bookingRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 14, paddingVertical: 14, gap: 10 },
-  bookingTitle: { fontSize: 14, fontWeight: '700', color: BRAND.text },
-  bookingMeta: { fontSize: 12, color: BRAND.textSecondary, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
-  statusUpcoming: { backgroundColor: BRAND.upcomingBg },
-  statusCompleted: { backgroundColor: BRAND.completedBg },
-  statusText: { fontSize: 12, fontWeight: '700' },
-  statusUpcomingText: { color: BRAND.upcomingText },
-  statusCompletedText: { color: BRAND.completedText },
+  bookingTitle: { fontSize: 13, fontWeight: '700', color: BRAND.text, lineHeight: 18 },
+  bookingMetaRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  bookingMeta: { fontSize: 11, color: BRAND.textSecondary },
+  datePill: {
+    backgroundColor: BRAND.pendingBg,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 2,
+    borderWidth: 1,
+    borderColor: '#F5D9B8',
+  },
+  datePillText: { fontSize: 11, fontWeight: '800', color: BRAND.primary },
+  bookingAmount: { fontSize: 13, fontWeight: '800', color: BRAND.primary },
+  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6, flexShrink: 0 },
+  statusText: { fontSize: 11, fontWeight: '700' },
+
+  viewAllBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    backgroundColor: BRAND.card,
+    borderWidth: 1.5, borderColor: BRAND.primary,
+    borderRadius: 12, paddingVertical: 13,
+  },
+  viewAllBtnText: { fontSize: 14, fontWeight: '700', color: BRAND.primary },
 
   menuRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: 14, paddingVertical: 14 },
   menuIconBg: { width: 36, height: 36, borderRadius: 10, backgroundColor: '#FFF1DE', alignItems: 'center', justifyContent: 'center' },

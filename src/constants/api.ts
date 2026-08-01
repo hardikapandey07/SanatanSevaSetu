@@ -43,6 +43,7 @@ export const API_CONFIG = {
     GET_PUJA_PROCESSES: '/api/v1/puja-processes/all',
     GET_FAQS: '/api/v1/faqs/all',
     GET_PUJA_PACKAGE_INFO: '/api/v1/puja-package-info/all',
+    GET_LOCATIONS: '/api/v1/extrafields/7',
     GET_ACTIVE_BANNERS: '/api/v1/banner/public/active-banners',
     GET_UPCOMING_EVENTS: '/api/v1/events/public/upcoming',
     GET_LIVE_BROADCASTS: '/api/v1/broadcasts/live/public',
@@ -52,6 +53,7 @@ export const API_CONFIG = {
     BROADCAST_VERIFY_PAYMENT: '/api/v1/broadcasts/verify-payment',
     INITIATE_PUJA_BOOKING: '/api/v1/puja-bookings/initiate',
     VERIFY_PUJA_PAYMENT: '/api/v1/payments/verify',
+    GET_MY_BOOKINGS: '/api/v1/users/me/bookings',
   },
   HEADERS: { 'Content-Type': 'application/json' },
   get LANG_HEADERS() {
@@ -207,6 +209,8 @@ export type PujaInfo = {
   tithi: string;
   is_active: boolean;
   puja_types: string[];
+  desktop_image: string | null;
+  mobile_image: string | null;
 };
 export type GetPujasResponse = { total_count: number; total_pages: number; data: PujaInfo[] };
 
@@ -290,6 +294,24 @@ export type VerifyPujaPaymentResponse = {
   message: string;
   transaction_id: string;
 };
+
+export type UserBooking = {
+  id: string;
+  booking_type: string;
+  reference_id: string;
+  title: string;
+  subtitle: string | null;
+  description: string;
+  booking_name: string;
+  mobile_number: string;
+  amount: number;
+  status: string;
+  status_code: number;
+  booking_date: string;
+  create_date: string;
+  action_url: string;
+};
+export type GetMyBookingsResponse = { data: UserBooking[]; total_count: number; total_pages: number; page: number; limit: number };
 
 export type VerifyPaymentRequest = {
   event_id: string;
@@ -822,6 +844,24 @@ export class ApiService {
       if (r.ok) return { success: true, data: data as VerifyPujaPaymentResponse, message: data.message ?? '' };
       return { success: false, message: data?.detail || data?.message || 'Payment verification failed.' };
     } catch { return { success: false, message: 'Network error.' }; }
+  }
+
+  static async getLocations(): Promise<ExtraField[]> {
+    try {
+      const url = `${this.baseUrl}${API_CONFIG.ENDPOINTS.GET_LOCATIONS}`;
+      const r = await fetch(url, { method: 'GET', headers: API_CONFIG.LANG_HEADERS });
+      return r.ok ? await r.json() as ExtraField[] : [];
+    } catch { return []; }
+  }
+
+  static async getMyBookings(): Promise<UserBooking[]> {
+    try {
+      const headers = await TokenManager.getAuthHeaders();
+      const url = `${this.baseUrl}${API_CONFIG.ENDPOINTS.GET_MY_BOOKINGS}`;
+      const r = await fetch(url, { method: 'GET', headers });
+      if (r.ok) { const d = await r.json() as GetMyBookingsResponse; return d.data ?? []; }
+      return [];
+    } catch { return []; }
   }
 
   static async getPujaPackageInfo(): Promise<PujaPackageInfo[]> {

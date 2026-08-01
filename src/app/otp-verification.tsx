@@ -10,6 +10,7 @@ import { ThemedText } from '@/components/themed-text';
 import { MessageModal } from '@/components/message-modal';
 import { Spacing } from '@/constants/theme';
 import { ApiService } from '@/constants/api';
+import { registerForPush } from '@/constants/push';
 import { useT } from '@/i18n/LanguageContext';
 
 const BRAND = {
@@ -112,6 +113,9 @@ export default function OtpVerificationScreen() {
       if (result.success) {
         // Fetch and store full user profile from server
         await ApiService.getUser(mobileNumber);
+        // Needs USER_ID, which getUser above just stored. Not awaited --
+        // the permission prompt shouldn't hold up the redirect to home.
+        registerForPush().catch(() => {});
         showModal('Success', result.message, 'success');
         setTimeout(() => {
           setModalVisible(false);

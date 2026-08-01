@@ -1,5 +1,5 @@
 npm install -g eas-cli
-eas login (Hardich07  and Hardich@07)
+eas login (Hardich07  and Hardich@07) 
 eas build:configure
   
   

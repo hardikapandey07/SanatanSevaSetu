@@ -1,24 +1,69 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useRouter } from "expo-router";
 import * as ExpoSplashScreen from "expo-splash-screen";
 import { useCallback, useEffect, useState } from "react";
-import { useColorScheme, View } from "react-native";
+import { Linking, useColorScheme, View } from "react-native";
 
 import { SplashOverlay } from "@/components/splash-overlay";
 import { TokenManager } from "@/constants/api";
+import {
+  addPushListeners,
+  getInitialTapTarget,
+  parseTapTarget,
+  registerForPush,
+  type PushTapTarget,
+} from "@/constants/push";
 import { LanguageProvider } from "@/i18n/LanguageContext";
 
 // Keep the native splash visible until our JS splash takes over.
 ExpoSplashScreen.preventAutoHideAsync().catch(() => {});
+
+type Router = ReturnType<typeof useRouter>;
+
+function openTapTarget(router: Router, target: PushTapTarget) {
+  if (target.kind === 'url') {
+    Linking.openURL(target.url).catch(e =>
+      console.warn('[push] could not open link', target.url, e),
+    );
+    return;
+  }
+  // Routes come from the admin panel as plain strings — cannot be checked
+  // against expo-router's generated route union at compile time.
+  router.push({ pathname: target.pathname, params: target.params } as never);
+}
 
 function AuthRedirect({ splashDone }: { splashDone: boolean }) {
   const router = useRouter();
 
   useEffect(() => {
     if (!splashDone) return;
-    TokenManager.isLoggedIn().then(loggedIn => {
-      if (loggedIn) router.replace('/(tabs)/home');
+    let cancelled = false;
+
+    TokenManager.isLoggedIn().then(async loggedIn => {
+      if (cancelled || !loggedIn) return;
+      // Re-register every launch: FCM tokens rotate, and the server upsert is
+      // idempotent, so this is cheap and keeps dead tokens out of the DB.
+      registerForPush().catch(() => {});
+      router.replace('/(tabs)/home');
+
+      // Deliberately after the replace above: a tap that launched the app would
+      // otherwise navigate first and then be immediately replaced by home.
+      const initial = await getInitialTapTarget();
+      if (!cancelled && initial) openTapTarget(router, initial);
     });
-  }, [splashDone, router]);
+
+    return () => { cancelled = true; };
+  }, [splashDone]);
+
+  // Taps while the app is already running or merely backgrounded.
+  // Registered once, independently of the splash, so nothing is missed mid-session.
+  useEffect(() => {
+    return addPushListeners({
+      onTapped: data => {
+        const target = parseTapTarget(data);
+        if (target) openTapTarget(router, target);
+      },
+    });
+  }, [router]);
 
   return null;
 }
@@ -67,6 +112,7 @@ export default function RootLayout() {
             <Stack.Screen name="broadcasts-list" />
             <Stack.Screen name="group-puja-list" />
             <Stack.Screen name="group-puja-detail" />
+            <Stack.Screen name="banner-detail" />
             <Stack.Screen name="(tabs)" />
           </Stack>
           <AuthRedirect splashDone={splashDone} />

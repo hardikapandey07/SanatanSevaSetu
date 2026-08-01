@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "674421903367",
+    "project_id": "fcm-vitco",
+    "storage_bucket": "fcm-vitco.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:674421903367:android:817bfcb3c8a1134fea1aa2",
+        "android_client_info": {
+          "package_name": "com.sanatansevasetu.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAQkL8k0ITVRKs9MuD2wcWPqCmXAxP5Ph4"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -28,6 +28,7 @@ import { getApiBaseUrl } from "@/constants/environment";
 import { LANGUAGES } from "@/constants/languages";
 import { Spacing } from "@/constants/theme";
 import { useLanguage, useTranslatedBatch } from "@/i18n/LanguageContext";
+import { ImageSlider } from "@/components/image-slider";
 import type { LangCode } from "@/i18n/translations";
 
 const BRAND = {
@@ -329,7 +330,7 @@ export default function HomeScreen() {
               </Pressable>
             </View>
           </View>
-          {/* Search Bar */}
+          {/* Search Bar — temporarily commented out
           <Pressable
             onPress={() => router.push("/pandit-search")}
             style={styles.searchBar}
@@ -347,6 +348,7 @@ export default function HomeScreen() {
               {t("searchPlaceholderNew")}
             </ThemedText>
           </Pressable>
+          */}
         </SafeAreaView>
       </LinearGradient>
 
@@ -356,7 +358,16 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Banner Slider */}
-        <BannerSlider banners={banners} />
+        <ImageSlider
+          slides={banners.map(b => ({
+            id: b.id,
+            uri: `${getApiBaseUrl()}/${Platform.OS === 'web' ? b.desktop_image : b.mobile_image}`,
+            title: b.title,
+            description: b.description,
+            buttonText: b.buttons?.[0]?.button_text || 'Book Now',
+          }))}
+          onPress={b => router.push({ pathname: '/banner-detail', params: { id: b.id } })}
+        />
 
         {/* Book Puja */}
         <ThemedText style={styles.sectionTitle}>Book Puja</ThemedText>
@@ -738,125 +749,6 @@ export default function HomeScreen() {
         </Pressable>
       </Modal>
 
-    </View>
-  );
-}
-
-function BannerSlider({ banners }: { banners: Banner[] }) {
-  const screenWidth = Dimensions.get("window").width;
-  const [width, setWidth] = useState(0);
-  const [index, setIndex] = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
-  const indexRef = useRef(0);
-  const pausedRef = useRef(false);
-  const count = banners.length;
-  const isWeb = Platform.OS === "web";
-
-  const effectiveWidth = width || (screenWidth - 32);
-  // 16:9 aspect ratio, capped at 320px on tablets/web
-  const bannerHeight = Math.min(Math.round(effectiveWidth * (9 / 16)), 320);
-
-  const goTo = (next: number) => {
-    indexRef.current = next;
-    setIndex(next);
-    scrollRef.current?.scrollTo({ x: next * effectiveWidth, animated: true });
-  };
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const next = Math.round(e.nativeEvent.contentOffset.x / effectiveWidth);
-    if (next !== indexRef.current && next >= 0 && next < count) {
-      indexRef.current = next;
-      setIndex(next);
-    }
-  };
-
-  // Auto-slide every 3s on both mobile and web
-  useEffect(() => {
-    if (count < 2) return;
-    const id = setInterval(() => {
-      if (pausedRef.current) return;
-      goTo((indexRef.current + 1) % count);
-    }, 3000);
-    return () => clearInterval(id);
-  }, [count, effectiveWidth]);
-
-  if (count === 0) {
-    return (
-      <View style={[styles.bannerCard, { backgroundColor: "#E0D6C2", opacity: 0.4, width: "100%", height: bannerHeight }]} />
-    );
-  }
-
-  const imgField = isWeb ? "desktop_image" : "mobile_image";
-
-  return (
-    <View
-      style={styles.bannerWrap}
-      onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
-    >
-      <ScrollView
-        ref={scrollRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onScroll={onScroll}
-        onScrollBeginDrag={() => { pausedRef.current = true; }}
-        onScrollEndDrag={() => { pausedRef.current = false; }}
-        scrollEventThrottle={16}
-        snapToInterval={effectiveWidth}
-        decelerationRate="fast"
-        scrollEnabled={!isWeb}
-        style={isWeb ? { overflow: "hidden" } : undefined}
-      >
-        {banners.map((b) => (
-          <Pressable
-            key={b.id}
-            onPress={() =>
-              router.push({ pathname: "/banner-detail", params: { id: b.id } })
-            }
-            style={({ pressed }) => [pressed && styles.pressed]}
-          >
-            <View style={{ position: "relative" }}>
-              <Image
-                source={{ uri: `${getApiBaseUrl()}/${b[imgField]}` }}
-                style={[styles.bannerCard, { width: effectiveWidth, height: bannerHeight }]}
-                contentFit="cover"
-                contentPosition="center"
-                transition={300}
-                cachePolicy="memory-disk"
-              />
-              <View style={styles.bannerBookBtn} pointerEvents="none">
-                <ThemedText style={styles.bannerBookBtnText}>Book Now</ThemedText>
-              </View>
-            </View>
-          </Pressable>
-        ))}
-      </ScrollView>
-
-      {/* Prev / Next arrows — shown on web */}
-      {isWeb && count > 1 && (
-        <>
-          <Pressable
-            onPress={() => goTo((indexRef.current - 1 + count) % count)}
-            style={[styles.bannerArrow, styles.bannerArrowLeft]}
-          >
-            <ThemedText style={styles.bannerArrowText}>‹</ThemedText>
-          </Pressable>
-          <Pressable
-            onPress={() => goTo((indexRef.current + 1) % count)}
-            style={[styles.bannerArrow, styles.bannerArrowRight]}
-          >
-            <ThemedText style={styles.bannerArrowText}>›</ThemedText>
-          </Pressable>
-        </>
-      )}
-
-      <View style={styles.dotsRow}>
-        {banners.map((b, i) => (
-          <Pressable key={b.id} onPress={() => goTo(i)}>
-            <View style={[styles.dot, i === index && styles.dotActive]} />
-          </Pressable>
-        ))}
-      </View>
     </View>
   );
 }
@@ -1405,6 +1297,30 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     backgroundColor: "#E0D6C2",
   },
+  bannerOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+    paddingTop: 32,
+  },
+  bannerTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    lineHeight: 19,
+    textShadowColor: 'rgba(0,0,0,0.4)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  bannerDesc: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.85)',
+    marginTop: 3,
+    fontWeight: '500',
+  },
   bannerArrow: {
     position: "absolute",
     top: "50%",
@@ -1421,18 +1337,11 @@ const styles = StyleSheet.create({
   bannerArrowRight: { right: 10 },
   bannerArrowText: { color: "#FFFFFF", fontSize: 22, fontWeight: "700", lineHeight: 26 },
   bannerBookBtn: {
-    position: "absolute",
-    bottom: 12,
-    left: 12,
     backgroundColor: BRAND.primary,
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     paddingVertical: 7,
     borderRadius: 999,
-    shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowOffset: { width: 0, height: 2 },
-    shadowRadius: 4,
-    elevation: 4,
+    flexShrink: 0,
   },
   bannerBookBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "800" },
   dotsRow: {
