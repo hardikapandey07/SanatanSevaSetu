@@ -150,7 +150,8 @@ export function parseTapTarget(data: Record<string, any> | null | undefined): Pu
   if (url) return { kind: 'url', url };
 
   const pathname = typeof data.route === 'string' ? data.route.trim() : '';
-  if (!pathname) return null;
+  // No route specified — default to notifications page so the user sees what arrived.
+  if (!pathname) return { kind: 'route', pathname: '/notifications', params: {} };
 
   let params: Record<string, string> = {};
   if (typeof data.params === 'string' && data.params) {

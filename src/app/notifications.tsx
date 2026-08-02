@@ -1,13 +1,22 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Pressable,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  View,
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { ApiService, type UserNotification } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
-import type { TranslationKey } from '@/i18n/translations';
+import { useLanguage, useT, useTranslatedList } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -21,74 +30,89 @@ const BRAND = {
   unreadBg: '#FFF8F0',
 };
 
-type NotificationItem = {
-  id: string;
-  icon: { ios: string; android: string; web: string };
-  titleKey: TranslationKey;
-  descriptionKey: TranslationKey;
-  time: string;
-  category: 'service' | 'event';
-  isUnread: boolean;
-};
+const LAST_READ_KEY = 'notif.lastReadAt';
+const CLEARED_BEFORE_KEY = 'notif.clearedBefore';
 
-const NOTIFICATIONS: NotificationItem[] = [
-  {
-    id: '1',
-    icon: { ios: 'flame.fill', android: 'local_fire_department', web: 'local_fire_department' },
-    titleKey: 'notifPoojaReminder',
-    descriptionKey: 'notifPoojaReminderDesc',
-    time: '2 hrs ago',
-    category: 'service',
-    isUnread: true,
-  },
-  {
-    id: '2',
-    icon: { ios: 'building.2.fill', android: 'temple_hindu', web: 'temple_hindu' },
-    titleKey: 'notifTempleUpdate',
-    descriptionKey: 'notifTempleUpdateDesc',
-    time: '3 days ago',
-    category: 'service',
-    isUnread: false,
-  },
-  {
-    id: '3',
-    icon: { ios: 'calendar.badge.plus', android: 'event', web: 'event' },
-    titleKey: 'notifEventStarting',
-    descriptionKey: 'notifEventStartingDesc',
-    time: '5 hrs ago',
-    category: 'event',
-    isUnread: true,
-  },
-  {
-    id: '4',
-    icon: { ios: 'book.circle.fill', android: 'school', web: 'school' },
-    titleKey: 'notifWebinar',
-    descriptionKey: 'notifWebinarDesc',
-    time: '4 days ago',
-    category: 'event',
-    isUnread: false,
-  },
-  {
-    id: '5',
-    icon: { ios: 'bell.badge.fill', android: 'notifications_active', web: 'notifications_active' },
-    titleKey: 'notifBookingConfirmed',
-    descriptionKey: 'notifBookingConfirmedDesc',
-    time: '1 week ago',
-    category: 'service',
-    isUnread: false,
-  },
-];
+const ICON_EVENT = { ios: 'calendar.badge.plus', android: 'event', web: 'event' } as const;
+const ICON_DEFAULT = { ios: 'bell.badge.fill', android: 'notifications_active', web: 'notifications_active' } as const;
+
+type SymbolName = React.ComponentProps<typeof SymbolView>['name'];
+
+function formatWhen(iso: string, lang: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const sameDay = new Date().toDateString() === d.toDateString();
+  return sameDay
+    ? d.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })
+    : d.toLocaleDateString(lang, { day: 'numeric', month: 'short' });
+}
 
 export default function NotificationsScreen() {
   const t = useT();
-  const unreadCount = NOTIFICATIONS.filter(n => n.isUnread).length;
+  const { lang } = useLanguage();
 
-  const handleMarkAllRead = () => {
-    // Handle mark all as read
+  const [raw, setRaw] = useState<UserNotification[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const [lastReadAt, setLastReadAt] = useState<string | null>(null);
+  const [clearedBefore, setClearedBefore] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    try {
+      const [{ items }, [[, read], [, cleared]]] = await Promise.all([
+        ApiService.getMyNotifications(1, 50),
+        AsyncStorage.multiGet([LAST_READ_KEY, CLEARED_BEFORE_KEY]),
+      ]);
+      setRaw(items);
+      setLastReadAt(read);
+      setClearedBefore(cleared);
+      setFailed(false);
+    } catch {
+      setFailed(true);
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  const onRefresh = useCallback(() => { setRefreshing(true); load(); }, [load]);
+
+  const visible = clearedBefore
+    ? raw.filter(n => new Date(n.created_at) > new Date(clearedBefore))
+    : raw;
+
+  const translated = useTranslatedList(visible, ['title', 'body']);
+
+  const isUnread = (n: UserNotification) =>
+    !lastReadAt || new Date(n.created_at) > new Date(lastReadAt);
+  const unreadCount = visible.filter(isUnread).length;
+
+  const handleMarkAllRead = async () => {
+    const now = new Date().toISOString();
+    setLastReadAt(now);
+    await AsyncStorage.setItem(LAST_READ_KEY, now);
   };
 
-  const handleClearAll = () => {
-    // Handle clear all notifications
+  const handleClearAll = async () => {
+    const now = new Date().toISOString();
+    setClearedBefore(now);
+    await AsyncStorage.setItem(CLEARED_BEFORE_KEY, now);
+  };
+
+  const handleOpen = (n: UserNotification) => {
+    router.push({
+      pathname: '/notification-detail',
+      params: {
+        id: n.id,
+        title: n.title,
+        body: n.body,
+        created_at: n.created_at,
+        data: JSON.stringify(n.data ?? {}),
+      },
+    } as never);
   };
 
   return (
@@ -127,23 +151,42 @@ export default function NotificationsScreen() {
       <ScrollView
         style={styles.scroll}
         contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}>
-        {NOTIFICATIONS.length > 0 ? (
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={BRAND.primary} />
+        }>
+        {loading ? (
+          <View style={styles.emptyState}>
+            <ActivityIndicator color={BRAND.primary} />
+          </View>
+        ) : failed ? (
+          <View style={styles.emptyState}>
+            <SymbolView
+              name={{ ios: 'wifi.slash', android: 'wifi_off', web: 'wifi_off' }}
+              tintColor={BRAND.textSecondary}
+              size={48}
+            />
+            <Pressable
+              onPress={() => { setLoading(true); load(); }}
+              style={({ pressed }) => [styles.clearAllBtn, pressed && styles.pressed]}>
+              <ThemedText style={styles.clearAllText}>{t('retry')}</ThemedText>
+            </Pressable>
+          </View>
+        ) : visible.length > 0 ? (
           <>
             <View style={styles.categorySection}>
-              <ThemedText style={styles.categoryTitle}>{t('serviceReminders')}</ThemedText>
-              {NOTIFICATIONS.filter(n => n.category === 'service').map(notification => (
-                <NotificationCard key={notification.id} notification={notification} t={t} />
+              {visible.map((n, i) => (
+                <NotificationCard
+                  key={n.id}
+                  title={translated[i]?.title ?? n.title}
+                  body={translated[i]?.body ?? n.body}
+                  when={formatWhen(n.created_at, lang)}
+                  icon={n.data?.category === 'event' ? ICON_EVENT : ICON_DEFAULT}
+                  unread={isUnread(n)}
+                  onPress={() => handleOpen(n)}
+                />
               ))}
             </View>
-
-            <View style={styles.categorySection}>
-              <ThemedText style={styles.categoryTitle}>{t('eventsAndFestivals')}</ThemedText>
-              {NOTIFICATIONS.filter(n => n.category === 'event').map(notification => (
-                <NotificationCard key={notification.id} notification={notification} t={t} />
-              ))}
-            </View>
-
             <Pressable
               onPress={handleClearAll}
               style={({ pressed }) => [styles.clearAllBtn, pressed && styles.pressed]}>
@@ -165,28 +208,27 @@ export default function NotificationsScreen() {
   );
 }
 
-function NotificationCard({ notification, t }: { notification: NotificationItem; t: (key: TranslationKey) => string }) {
+function NotificationCard({
+  title, body, when, icon, unread, onPress,
+}: {
+  title: string; body: string; when: string;
+  icon: SymbolName; unread: boolean; onPress: () => void;
+}) {
   return (
-    <Pressable style={({ pressed }) => [styles.notifCard, notification.isUnread && styles.unread, pressed && styles.pressed]}>
+    <Pressable
+      onPress={onPress}
+      style={({ pressed }) => [styles.notifCard, unread && styles.unread, pressed && styles.pressed]}>
       <View style={styles.iconWrap}>
-        <View style={[styles.icon, notification.isUnread && styles.iconUnread]}>
-          <SymbolView
-            name={notification.icon}
-            tintColor={BRAND.primary}
-            size={20}
-          />
+        <View style={[styles.icon, unread && styles.iconUnread]}>
+          <SymbolView name={icon} tintColor={BRAND.primary} size={20} />
         </View>
-        {notification.isUnread && <View style={styles.unreadDot} />}
+        {unread && <View style={styles.unreadDot} />}
       </View>
-
       <View style={styles.content}>
-        <ThemedText style={[styles.title, notification.isUnread && styles.titleUnread]}>
-          {t(notification.titleKey)}
-        </ThemedText>
-        <ThemedText style={styles.description}>{t(notification.descriptionKey)}</ThemedText>
-        <ThemedText style={styles.time}>{notification.time}</ThemedText>
+        <ThemedText style={[styles.title, unread && styles.titleUnread]}>{title}</ThemedText>
+        <ThemedText style={styles.description}>{body}</ThemedText>
+        <ThemedText style={styles.time}>{when}</ThemedText>
       </View>
-
       <SymbolView
         name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
         tintColor={BRAND.textSecondary}
@@ -207,12 +249,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   backBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 32, height: 32, borderRadius: 16,
     backgroundColor: 'rgba(255,255,255,0.18)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
   },
   headerTitle: { flex: 1, gap: 2 },
   headerTitleText: { fontSize: 18, fontWeight: '800', color: '#FFFFFF' },
@@ -225,50 +264,22 @@ const styles = StyleSheet.create({
     paddingBottom: Spacing.five,
   },
   categorySection: { marginBottom: Spacing.four },
-  categoryTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: BRAND.text,
-    marginBottom: Spacing.two,
-    paddingHorizontal: 4,
-  },
   notifCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    backgroundColor: BRAND.card,
-    borderWidth: 1,
-    borderColor: BRAND.border,
-    borderRadius: 12,
-    padding: Spacing.three,
-    marginBottom: Spacing.two,
-    gap: 12,
+    flexDirection: 'row', alignItems: 'flex-start',
+    backgroundColor: BRAND.card, borderWidth: 1, borderColor: BRAND.border,
+    borderRadius: 12, padding: Spacing.three, marginBottom: Spacing.two, gap: 12,
   },
-  unread: {
-    backgroundColor: BRAND.unreadBg,
-    borderColor: BRAND.primary,
-  },
+  unread: { backgroundColor: BRAND.unreadBg, borderColor: BRAND.primary },
   iconWrap: { position: 'relative', width: 44, height: 44 },
   icon: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    backgroundColor: BRAND.iconBg,
-    alignItems: 'center',
-    justifyContent: 'center',
+    width: '100%', height: '100%', borderRadius: 12,
+    backgroundColor: BRAND.iconBg, alignItems: 'center', justifyContent: 'center',
   },
-  iconUnread: {
-    backgroundColor: 'rgba(232, 115, 28, 0.15)',
-  },
+  iconUnread: { backgroundColor: 'rgba(232, 115, 28, 0.15)' },
   unreadDot: {
-    position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#DC2626',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+    position: 'absolute', top: -2, right: -2,
+    width: 12, height: 12, borderRadius: 6,
+    backgroundColor: '#DC2626', borderWidth: 2, borderColor: '#FFFFFF',
   },
   content: { flex: 1, gap: 4 },
   title: { fontSize: 14, fontWeight: '600', color: BRAND.text },
@@ -276,18 +287,11 @@ const styles = StyleSheet.create({
   description: { fontSize: 13, color: BRAND.textSecondary, lineHeight: 18 },
   time: { fontSize: 11, color: BRAND.textSecondary, marginTop: 2 },
   emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-    gap: 12,
+    flex: 1, alignItems: 'center', justifyContent: 'center',
+    paddingVertical: 60, gap: 12,
   },
   emptyText: { fontSize: 16, fontWeight: '600', color: BRAND.textSecondary },
-  clearAllBtn: {
-    marginTop: Spacing.three,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
+  clearAllBtn: { marginTop: Spacing.three, paddingVertical: 12, alignItems: 'center' },
   clearAllText: { color: BRAND.textSecondary, fontSize: 14, fontWeight: '600' },
   pressed: { opacity: 0.85 },
 });

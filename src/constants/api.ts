@@ -54,6 +54,7 @@ export const API_CONFIG = {
     INITIATE_PUJA_BOOKING: '/api/v1/puja-bookings/initiate',
     VERIFY_PUJA_PAYMENT: '/api/v1/payments/verify',
     GET_MY_BOOKINGS: '/api/v1/users/me/bookings',
+    GET_MY_NOTIFICATIONS: '/api/v1/notifications/me',
   },
   HEADERS: { 'Content-Type': 'application/json' },
   get LANG_HEADERS() {
@@ -78,6 +79,14 @@ export type UserProfile = {
 };
 
 export type UserData = { id: string; user_id: string; name: string; mobile_number: string };
+
+export type UserNotification = {
+  id: string;
+  title: string;
+  body: string;
+  data: Record<string, string>;
+  created_at: string;
+};
 
 export type ExtraField = { id: string; description: string };
 
@@ -862,6 +871,33 @@ export class ApiService {
       if (r.ok) { const d = await r.json() as GetMyBookingsResponse; return d.data ?? []; }
       return [];
     } catch { return []; }
+  }
+
+  static async getMyNotifications(
+    page = 1,
+    limit = 20,
+  ): Promise<{ items: UserNotification[]; totalPages: number }> {
+    try {
+      const headers = await TokenManager.getAuthHeaders();
+      const url = `${this.baseUrl}${API_CONFIG.ENDPOINTS.GET_MY_NOTIFICATIONS}?page=${page}&limit=${limit}`;
+      logCurl('GET', url, headers as Record<string, string>);
+      const response = await fetch(url, { method: 'GET', headers });
+      // 401/403 = auth problem — re-throw so the screen shows the error state
+      if (response.status === 401 || response.status === 403) {
+        throw new Error(`notifications ${response.status}`);
+      }
+      // 404 = endpoint not yet on this server, treat as empty inbox
+      if (!response.ok) return { items: [], totalPages: 0 };
+      const data = await response.json();
+      return {
+        items: Array.isArray(data?.data) ? (data.data as UserNotification[]) : [],
+        totalPages: Number(data?.total_pages ?? 0),
+      };
+    } catch (e: any) {
+      // Only swallow non-auth errors (network down, JSON parse fail, etc.)
+      if (e?.message?.includes('401') || e?.message?.includes('403')) throw e;
+      return { items: [], totalPages: 0 };
+    }
   }
 
   static async getPujaPackageInfo(): Promise<PujaPackageInfo[]> {

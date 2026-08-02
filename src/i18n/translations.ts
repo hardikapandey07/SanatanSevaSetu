@@ -330,6 +330,7 @@ export const TRANSLATIONS = {
     servicesSubtitle: 'Divine services at your fingertips',
     allServices: 'All Services',
     eventsSubtitle: 'Festivals, kathas, webinars & more',
+    retry: 'Retry',
   },
   hi: {
     chooseLanguage: 'भाषा चुनें',
@@ -660,6 +661,7 @@ export const TRANSLATIONS = {
     servicesSubtitle: 'आपकी उंगलियों पर दिव्य सेवाएँ',
     allServices: 'सभी सेवाएँ',
     eventsSubtitle: 'त्योहार, कथा, वेबिनार और अधिक',
+    retry: 'पुनः प्रयास करें',
   },
   gu: {
     chooseLanguage: 'ભાષા પસંદ કરો',
@@ -990,6 +992,7 @@ export const TRANSLATIONS = {
     servicesSubtitle: 'તમારી આંગળીએ દિવ્ય સેવાઓ',
     allServices: 'બધી સેવાઓ',
     eventsSubtitle: 'તહેવારો, કથા, વેબિનાર અને વધુ',
+    retry: 'ફરી પ્રયાસ કરો',
   },
   mr: {
     chooseLanguage: 'भाषा निवडा',
@@ -1320,6 +1323,7 @@ export const TRANSLATIONS = {
     servicesSubtitle: 'तुमच्या बोटांवर दिव्य सेवा',
     allServices: 'सर्व सेवा',
     eventsSubtitle: 'सण, कथा, वेबिनार आणि अधिक',
+    retry: 'पुन्हा प्रयत्न करा',
   },
 } as const satisfies Record<LangCode, Record<string, string>>;
 

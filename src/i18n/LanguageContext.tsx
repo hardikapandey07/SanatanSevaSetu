@@ -85,6 +85,34 @@ export function useTranslated(text: string | null | undefined): string {
 }
 
 /**
+ * Translates a list of objects by specified keys in one batch call.
+ * Usage: const translated = useTranslatedList(items, ['title', 'body']);
+ */
+export function useTranslatedList<T extends Record<string, any>>(
+  items: T[],
+  keys: (keyof T)[],
+): T[] {
+  const { lang } = useLanguage();
+  const [results, setResults] = useState<T[]>(items);
+
+  useEffect(() => {
+    setResults(items);
+    if (lang === 'en' || !items.length) return;
+    const allTexts = items.flatMap(item => keys.map(k => String(item[k] ?? '')));
+    translateBatch(allTexts, lang).then(translated => {
+      const out = items.map((item, i) => {
+        const copy = { ...item };
+        keys.forEach((k, ki) => { copy[k as string] = translated[i * keys.length + ki] as any; });
+        return copy;
+      });
+      setResults(out);
+    });
+  }, [items.map(i => keys.map(k => i[k]).join('|')).join('||'), lang]);
+
+  return results;
+}
+
+/**
  * Translates multiple dynamic strings in one batch call.
  * Usage: const [name, desc] = useTranslatedBatch([item.name, item.description]);
  */

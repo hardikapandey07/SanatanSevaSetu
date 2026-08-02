@@ -104,6 +104,7 @@ export default function RootLayout() {
             <Stack.Screen name="payment" />
             <Stack.Screen name="my-bookings" />
             <Stack.Screen name="notifications" />
+            <Stack.Screen name="notification-detail" />
             <Stack.Screen name="suggestion" />
             <Stack.Screen name="language-settings" />
             <Stack.Screen name="reward-referral" />
