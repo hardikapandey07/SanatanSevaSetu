@@ -30,7 +30,7 @@ type Props = {
   autoPlayMs?: number;
 };
 
-export function ImageSlider({ slides, onPress, autoPlayMs = 3000 }: Props) {
+export function ImageSlider({ slides, onPress, autoPlayMs = 5000 }: Props) {
   const screenWidth = Dimensions.get('window').width;
   const [width, setWidth] = useState(0);
   const [index, setIndex] = useState(0);
@@ -86,8 +86,12 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 3000 }: Props) {
               </ThemedText>
             )}
             {!!slide.description && (
-              <ThemedText style={styles.overlayDesc} numberOfLines={2}>
-                {slide.description}
+              <ThemedText style={styles.overlayDesc}>
+                {slide.description.split(' ').reduce((acc, word, i) => {
+                  const lineIdx = Math.floor(i / 4);
+                  acc[lineIdx] = acc[lineIdx] ? acc[lineIdx] + ' ' + word : word;
+                  return acc;
+                }, [] as string[]).join('\n')}
               </ThemedText>
             )}
           </View>
@@ -114,7 +118,7 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 3000 }: Props) {
     count > 1 ? (
       <>
         <Pressable
-          onPress={() => goTo((useIndexRef ? indexRef.current : index - 1 + count) % count)}
+          onPress={() => goTo((useIndexRef ? indexRef.current - 1 + count : index - 1 + count) % count)}
           style={[styles.arrow, styles.arrowLeft]}
         >
           <ThemedText style={styles.arrowText}>‹</ThemedText>
@@ -142,7 +146,7 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 3000 }: Props) {
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' } as any}
             />
             <View
-              style={[StyleSheet.absoluteFill, { background: 'linear-gradient(to top, rgba(0,0,0,0.72) 0%, transparent 55%)' } as any]}
+              style={[StyleSheet.absoluteFill, { background: 'linear-gradient(to left, rgba(0,0,0,0.72) 0%, transparent 55%)' } as any]}
               pointerEvents="none"
             />
             <Overlay slide={slides[index]} />
@@ -167,7 +171,7 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 3000 }: Props) {
         onScrollEndDrag={() => { pausedRef.current = false; }}
         scrollEventThrottle={16}
         snapToInterval={effectiveWidth}
-        decelerationRate="fast"
+        decelerationRate={0.85}
       >
         {slides.map(s => (
           <Pressable
@@ -181,13 +185,13 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 3000 }: Props) {
                 style={{ width: effectiveWidth, height: bannerHeight }}
                 contentFit="cover"
                 contentPosition="center"
-                transition={300}
+                transition={600}
                 cachePolicy="memory-disk"
               />
               <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.72)']}
-                start={{ x: 0, y: 0.3 }}
-                end={{ x: 0, y: 1 }}
+                start={{ x: 0.3, y: 0 }}
+                end={{ x: 1, y: 0 }}
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
@@ -206,18 +210,22 @@ const styles = StyleSheet.create({
   wrap: { gap: 8 },
   placeholder: { borderRadius: 12, backgroundColor: '#E0D6C2', opacity: 0.4, width: '100%' },
   overlay: {
-    position: 'absolute', bottom: 0, left: 0, right: 0,
-    paddingHorizontal: 12, paddingBottom: 12, paddingTop: 32,
+    position: 'absolute', top: 0, bottom: 0,
+    left: '15%', right: 0,
+    paddingHorizontal: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  overlayInner: { flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
+  overlayInner: { flexDirection: 'column', alignItems: 'center', gap: 6 },
   overlayTitle: {
-    fontSize: 14, fontWeight: '800', color: '#FFFFFF', lineHeight: 19,
+    fontSize: 16, fontWeight: '800', color: '#FFFFFF', lineHeight: 22,
+    textAlign: 'center',
     textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
   },
-  overlayDesc: { fontSize: 11, color: 'rgba(255,255,255,0.85)', marginTop: 3, fontWeight: '500' },
+  overlayDesc: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500', textAlign: 'center', lineHeight: 16 },
   overlayBtn: {
     backgroundColor: PRIMARY, paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 999, flexShrink: 0,
+    borderRadius: 999, flexShrink: 0, marginTop: 4,
   },
   overlayBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   arrow: {

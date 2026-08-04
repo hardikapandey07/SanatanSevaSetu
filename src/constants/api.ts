@@ -171,6 +171,9 @@ export type Banner = {
   duration_days: number; is_active: boolean; is_default: boolean;
   created_at: string; updated_at: string;
   buttons: BannerButton[];
+  banner_for?: string;
+  banner_for_code?: number;
+  reference_id?: string;
 };
 export type GetBannersResponse = {
   success: boolean; total_count: number; data: Banner[];
@@ -318,6 +321,9 @@ export type UserBooking = {
   status_code: number;
   booking_date: string;
   create_date: string;
+  payment_id: string | null;
+  payment_no: string | null;
+  gateway_payment_id: string | null;
   action_url: string;
 };
 export type GetMyBookingsResponse = { data: UserBooking[]; total_count: number; total_pages: number; page: number; limit: number };

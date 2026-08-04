@@ -24,9 +24,9 @@ const ICONS: Record<IconKey, { ios: string; android: string; web: string }> = {
   profile: { ios: 'person.fill', android: 'person', web: 'person' },
 };
 
-const TABS: { name: string; icon: IconKey; labelKey: TranslationKey }[] = [
+const TABS: { name: string; icon: IconKey; labelKey: TranslationKey; hidden?: boolean }[] = [
   { name: 'home', icon: 'home', labelKey: 'tabHome' },
-  { name: 'services', icon: 'services', labelKey: 'tabServices' },
+  { name: 'services', icon: 'services', labelKey: 'tabServices', hidden: true },
   { name: 'events', icon: 'events', labelKey: 'tabEvents' },
   { name: 'profile', icon: 'profile', labelKey: 'tabProfile' },
 ];
@@ -52,7 +52,7 @@ function CustomTabBar({ state, navigation }: any) {
         {state.routes.map((route: any, index: number) => {
           const focused = state.index === index;
           const tabMeta = TABS.find(tb => tb.name === route.name);
-          if (!tabMeta) return null;
+          if (!tabMeta || tabMeta.hidden) return null;
 
           const onPress = () => {
             const event = navigation.emit({

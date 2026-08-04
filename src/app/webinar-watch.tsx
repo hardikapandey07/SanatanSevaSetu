@@ -23,6 +23,7 @@ import AgoraPlayer from '@/components/agora-player';
 import { ThemedText } from '@/components/themed-text';
 import { ApiService, type BroadcastAccessResponse, type StreamInfo } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
+import { useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -100,6 +101,11 @@ export default function WebinarWatchScreen() {
       }
     };
   }, []);
+
+  const [translatedTitle, translatedSubTitle] = useTranslatedBatch([title, sub_title]);
+  const [translatedEventTitle, translatedSpeakerName] = useTranslatedBatch([
+    streamInfo?.event_title, streamInfo?.speaker_name,
+  ]);
 
   useEffect(() => { checkAccess(); }, [id]);
 
@@ -189,7 +195,7 @@ export default function WebinarWatchScreen() {
             <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.headerBackBtn, pressed && styles.pressed]}>
               <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor="#FFFFFF" size={18} />
             </Pressable>
-            <ThemedText style={styles.headerTitle} numberOfLines={1}>{title ?? 'Live Event'}</ThemedText>
+            <ThemedText style={styles.headerTitle} numberOfLines={1}>{translatedTitle || 'Live Event'}</ThemedText>
           </SafeAreaView>
         </LinearGradient>
 
@@ -199,8 +205,8 @@ export default function WebinarWatchScreen() {
               <View style={styles.livePill}><View style={styles.liveDot} /><ThemedText style={styles.livePillText}>LIVE</ThemedText></View>
               {!!amount && <View style={styles.pricePill}><ThemedText style={styles.priceText}>₹{amount}</ThemedText></View>}
             </View>
-            <ThemedText style={styles.eventTitle}>{title ?? 'Live Event'}</ThemedText>
-            {!!sub_title && <ThemedText style={styles.eventSubtitle}>{sub_title}</ThemedText>}
+            <ThemedText style={styles.eventTitle}>{translatedTitle || 'Live Event'}</ThemedText>
+            {!!sub_title && <ThemedText style={styles.eventSubtitle}>{translatedSubTitle}</ThemedText>}
           </View>
 
           <View style={[styles.card, styles.paymentNoticeCard]}>
@@ -260,7 +266,7 @@ export default function WebinarWatchScreen() {
             <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.headerBackBtn, pressed && styles.pressed]}>
               <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor="#FFFFFF" size={18} />
             </Pressable>
-            <ThemedText style={styles.headerTitle} numberOfLines={1}>{streamInfo?.event_title ?? title ?? 'Live Stream'}</ThemedText>
+            <ThemedText style={styles.headerTitle} numberOfLines={1}>{translatedEventTitle || translatedTitle || 'Live Stream'}</ThemedText>
             <View style={styles.livePillSmall}><View style={styles.liveDot} /><ThemedText style={styles.livePillText}>LIVE</ThemedText></View>
           </SafeAreaView>
         </LinearGradient>
@@ -293,7 +299,7 @@ export default function WebinarWatchScreen() {
             <Pressable onPress={() => router.back()} style={({ pressed }) => [styles.headerBackBtn, pressed && styles.pressed]}>
               <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor="#FFFFFF" size={18} />
             </Pressable>
-            <ThemedText style={styles.fullscreenTitle} numberOfLines={1}>{streamInfo?.event_title ?? title}</ThemedText>
+            <ThemedText style={styles.fullscreenTitle} numberOfLines={1}>{translatedEventTitle || translatedTitle}</ThemedText>
             <View style={styles.livePillSmall}><View style={styles.liveDot} /><ThemedText style={styles.livePillText}>LIVE</ThemedText></View>
           </SafeAreaView>
         )}
@@ -307,7 +313,7 @@ export default function WebinarWatchScreen() {
           <ScrollView contentContainerStyle={styles.infoContent} showsVerticalScrollIndicator={false}>
             {/* Host info card */}
             <View style={styles.card}>
-              <ThemedText style={styles.streamTitle}>{streamInfo?.event_title ?? title}</ThemedText>
+              <ThemedText style={styles.streamTitle}>{translatedEventTitle || translatedTitle}</ThemedText>
               {!!streamInfo?.speaker_name && (
                 <View style={styles.hostRow}>
                   <View style={styles.hostAvatar}>
@@ -315,7 +321,7 @@ export default function WebinarWatchScreen() {
                   </View>
                   <View style={{ flex: 1 }}>
                     <ThemedText style={styles.hostedBy}>Hosted by</ThemedText>
-                    <ThemedText style={styles.hostName}>{streamInfo.speaker_name}</ThemedText>
+                    <ThemedText style={styles.hostName}>{translatedSpeakerName}</ThemedText>
                   </View>
                   {!!streamInfo.viewer_count && (
                     <View style={styles.viewerBadge}>

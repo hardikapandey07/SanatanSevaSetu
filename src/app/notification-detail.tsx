@@ -112,7 +112,7 @@ export default function NotificationDetailScreen() {
               end={{ x: 1, y: 0 }}
               style={styles.actionGradient}>
               <ThemedText style={styles.actionText}>
-                {target?.kind === 'url' ? 'Open Link' : 'View Details'}
+                {target?.kind === 'url' ? t('openLink') : t('viewDetails')}
               </ThemedText>
               <SymbolView
                 name={{ ios: 'arrow.right', android: 'arrow_forward', web: 'arrow_forward' }}

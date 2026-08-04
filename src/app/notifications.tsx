@@ -17,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ApiService, type UserNotification } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
 import { useLanguage, useT, useTranslatedList } from '@/i18n/LanguageContext';
+import { isNotificationUnread, NOTIF_CLEARED_BEFORE_KEY, NOTIF_LAST_READ_KEY } from '@/hooks/use-unread-notifications';
 
 const BRAND = {
   primary: '#E8731C',
@@ -30,8 +31,8 @@ const BRAND = {
   unreadBg: '#FFF8F0',
 };
 
-const LAST_READ_KEY = 'notif.lastReadAt';
-const CLEARED_BEFORE_KEY = 'notif.clearedBefore';
+const LAST_READ_KEY = NOTIF_LAST_READ_KEY;
+const CLEARED_BEFORE_KEY = NOTIF_CLEARED_BEFORE_KEY;
 
 const ICON_EVENT = { ios: 'calendar.badge.plus', android: 'event', web: 'event' } as const;
 const ICON_DEFAULT = { ios: 'bell.badge.fill', android: 'notifications_active', web: 'notifications_active' } as const;
@@ -86,8 +87,7 @@ export default function NotificationsScreen() {
 
   const translated = useTranslatedList(visible, ['title', 'body']);
 
-  const isUnread = (n: UserNotification) =>
-    !lastReadAt || new Date(n.created_at) > new Date(lastReadAt);
+  const isUnread = (n: UserNotification) => isNotificationUnread(n, lastReadAt);
   const unreadCount = visible.filter(isUnread).length;
 
   const handleMarkAllRead = async () => {

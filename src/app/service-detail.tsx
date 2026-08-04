@@ -18,7 +18,7 @@ import { ThemedText } from '@/components/themed-text';
 import { TokenManager } from '@/constants/api';
 import { getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -79,6 +79,8 @@ export default function ServiceDetailScreen() {
   ];
   const price = params.servicePrice ? Number(params.servicePrice) : 0;
 
+  const [serviceName, serviceCategory] = useTranslatedBatch([params.serviceName, params.serviceCategory]);
+
   const handleBookService = async () => {
     const profile = await TokenManager.getUserProfile();
     // Check if address is missing (email is optional per requirement)
@@ -137,7 +139,7 @@ export default function ServiceDetailScreen() {
             />
           </Pressable>
           <ThemedText style={styles.headerTitle} numberOfLines={1}>
-            {params.serviceName}
+            {serviceName}
           </ThemedText>
         </SafeAreaView>
       </LinearGradient>
@@ -157,14 +159,14 @@ export default function ServiceDetailScreen() {
             </View>
           )}
           <View style={styles.categoryPill}>
-            <ThemedText style={styles.categoryPillText}>{params.serviceCategory}</ThemedText>
+            <ThemedText style={styles.categoryPillText}>{serviceCategory}</ThemedText>
           </View>
         </View>
 
         {/* Title + Price */}
         <View style={styles.card}>
           <View style={styles.titleRow}>
-            <ThemedText style={styles.serviceName}>{params.serviceName}</ThemedText>
+            <ThemedText style={styles.serviceName}>{serviceName}</ThemedText>
             <View style={styles.priceBadge}>
               <ThemedText style={styles.priceText}>₹{price.toLocaleString()}</ThemedText>
             </View>

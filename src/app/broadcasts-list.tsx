@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { ApiService, type Broadcast } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -83,7 +83,7 @@ export default function BroadcastsListScreen() {
               </ThemedText>
               {!loading && (
                 <ThemedText style={styles.headerCount}>
-                  {filtered.length} {isLive ? 'live now' : 'upcoming'}
+                  {filtered.length} {isLive ? t('liveNowCount') : t('upcomingCount')}
                 </ThemedText>
               )}
             </View>
@@ -105,7 +105,7 @@ export default function BroadcastsListScreen() {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder={isLive ? 'Search live services...' : 'Search upcoming events...'}
+              placeholder={isLive ? t('searchLive') : t('searchUpcoming')}
               placeholderTextColor={BRAND.textSecondary}
               style={[styles.searchInput, Platform.OS === 'web' ? ({ outlineWidth: 0 } as object) : null]}
             />
@@ -129,7 +129,7 @@ export default function BroadcastsListScreen() {
         <View style={styles.emptyWrap}>
           <ThemedText style={styles.emptyEmoji}>{isLive ? '📺' : '📅'}</ThemedText>
           <ThemedText style={styles.emptyText}>
-            {search ? 'No results found' : isLive ? 'No live services right now' : 'No upcoming events'}
+            {search ? t('noResultsFound') : isLive ? t('noLiveNow') : t('noUpcomingEvents')}
           </ThemedText>
         </View>
       ) : (
@@ -162,6 +162,8 @@ function BroadcastRow({
   bg: string;
   emoji: string;
 }) {
+  const t = useT();
+  const [title, subTitle] = useTranslatedBatch([item.title, item.sub_title]);
   const dateStr = (() => {
     try {
       return new Date(item.schedule_start_time).toLocaleString('en-IN', {
@@ -194,9 +196,9 @@ function BroadcastRow({
 
       {/* Info */}
       <View style={styles.rowBody}>
-        <ThemedText style={styles.rowTitle} numberOfLines={2}>{item.title}</ThemedText>
+        <ThemedText style={styles.rowTitle} numberOfLines={2}>{title}</ThemedText>
         {!!item.sub_title && (
-          <ThemedText style={styles.rowSub} numberOfLines={1}>{item.sub_title}</ThemedText>
+          <ThemedText style={styles.rowSub} numberOfLines={1}>{subTitle}</ThemedText>
         )}
         {!!dateStr && (
           <ThemedText style={styles.rowDate}>📅 {dateStr}</ThemedText>
@@ -204,12 +206,12 @@ function BroadcastRow({
         <View style={styles.rowFooter}>
           <View style={[styles.priceBadge, !item.is_paid_event && styles.priceBadgeFree]}>
             <ThemedText style={styles.priceText}>
-              {item.is_paid_event && item.event_price != null ? `₹${item.event_price}` : 'Free'}
+              {item.is_paid_event && item.event_price != null ? `₹${item.event_price}` : t('free')}
             </ThemedText>
           </View>
           {isLive && (
             <View style={styles.watchBtn}>
-              <ThemedText style={styles.watchBtnText}>▶ Watch</ThemedText>
+              <ThemedText style={styles.watchBtnText}>{t('watchBtn')}</ThemedText>
             </View>
           )}
         </View>

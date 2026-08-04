@@ -8,7 +8,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { ThemedText } from '@/components/themed-text';
 import { getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -36,6 +36,10 @@ export default function TempleDetailScreen() {
 
   const imageUri = p.image_url ? `${getApiBaseUrl()}/${p.image_url}` : null;
   const isVerified = p.is_verify === 'true';
+
+  const [name, address, pujaCentreName, chadhavaDetails, howToReach, bestTimeToVisit] = useTranslatedBatch([
+    p.name, p.address, p.puja_centre_name, p.chadhava_details, p.how_to_reach, p.best_time_to_visit,
+  ]);
 
   const formatTime = (raw: string) => {
     if (!raw || raw === '00:00:00') return null;
@@ -89,7 +93,7 @@ export default function TempleDetailScreen() {
 
           <View style={styles.heroBottom}>
             <View style={styles.heroTitleRow}>
-              <ThemedText style={styles.heroTitle} numberOfLines={2}>{p.name}</ThemedText>
+              <ThemedText style={styles.heroTitle} numberOfLines={2}>{name}</ThemedText>
               {isVerified && (
                 <View style={styles.verifiedBadge}>
                   <ThemedText style={styles.verifiedText}>✓ Verified</ThemedText>
@@ -98,7 +102,7 @@ export default function TempleDetailScreen() {
             </View>
             <View style={styles.heroAddressRow}>
               <SymbolView name={{ ios: 'mappin', android: 'place', web: 'place' }} tintColor="rgba(255,255,255,0.8)" size={12} />
-              <ThemedText style={styles.heroAddress} numberOfLines={2}>{p.address}</ThemedText>
+              <ThemedText style={styles.heroAddress} numberOfLines={2}>{address}</ThemedText>
             </View>
           </View>
         </View>
@@ -112,7 +116,7 @@ export default function TempleDetailScreen() {
           {!!p.puja_centre_name && p.puja_centre_name !== 'Not Applicable' && (
             <View style={[styles.chip, styles.chipOrange]}>
               <ThemedText style={styles.chipEmoji}>🪔</ThemedText>
-              <ThemedText style={[styles.chipText, { color: BRAND.primary }]}>{p.puja_centre_name}</ThemedText>
+              <ThemedText style={[styles.chipText, { color: BRAND.primary }]}>{pujaCentreName}</ThemedText>
             </View>
           )}
         </View>
@@ -121,7 +125,7 @@ export default function TempleDetailScreen() {
         <View style={styles.card}>
           <ThemedText style={styles.cardTitle}>Temple Details</ThemedText>
 
-          <InfoRow icon={{ ios: 'mappin.and.ellipse', android: 'place', web: 'place' }} label="Address" value={p.address} />
+          <InfoRow icon={{ ios: 'mappin.and.ellipse', android: 'place', web: 'place' }} label="Address" value={address} />
 
           {!!p.pincode && (
             <InfoRow
@@ -169,7 +173,7 @@ export default function TempleDetailScreen() {
             <InfoRow
               icon={{ ios: 'star.fill', android: 'star', web: 'star' }}
               label="Chadhava"
-              value={p.chadhava_details}
+              value={chadhavaDetails}
             />
           )}
         </View>
@@ -178,7 +182,7 @@ export default function TempleDetailScreen() {
         {!!p.how_to_reach && (
           <View style={styles.card}>
             <ThemedText style={styles.cardTitle}>🗺️ How to Reach</ThemedText>
-            <ThemedText style={styles.cardBody}>{p.how_to_reach}</ThemedText>
+            <ThemedText style={styles.cardBody}>{howToReach}</ThemedText>
           </View>
         )}
 
@@ -186,7 +190,7 @@ export default function TempleDetailScreen() {
         {!!p.best_time_to_visit && (
           <View style={styles.card}>
             <ThemedText style={styles.cardTitle}>🌤️ Best Time to Visit</ThemedText>
-            <ThemedText style={styles.cardBody}>{p.best_time_to_visit}</ThemedText>
+            <ThemedText style={styles.cardBody}>{bestTimeToVisit}</ThemedText>
           </View>
         )}
 

@@ -20,15 +20,18 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ThemedText } from "@/components/themed-text";
 import {
   ApiService,
+  TokenManager,
   type Banner,
   type Broadcast,
   type Mandir,
 } from "@/constants/api";
+import { unregisterForPush } from "@/constants/push";
 import { getApiBaseUrl } from "@/constants/environment";
 import { LANGUAGES } from "@/constants/languages";
 import { Spacing } from "@/constants/theme";
-import { useLanguage, useTranslatedBatch } from "@/i18n/LanguageContext";
+import { useLanguage, useTranslatedBatch, useTranslatedList } from "@/i18n/LanguageContext";
 import { ImageSlider } from "@/components/image-slider";
+import { useUnreadNotificationsCount } from "@/hooks/use-unread-notifications";
 import type { LangCode } from "@/i18n/translations";
 
 const BRAND = {
@@ -183,23 +186,13 @@ const SIDE_MENU_ITEMS = [
       android: "account_balance",
       web: "account_balance",
     },
-    label: "Mandir Search",
+    labelKey: "mandirSearch",
     route: "/temple-search",
   },
   {
-    icon: { ios: "person.fill", android: "person", web: "person" },
-    label: "Pandit Search",
-    route: "/pandit-search",
-  },
-  {
-    icon: { ios: "person.badge.plus", android: "person_add", web: "person_add" },
-    label: "Register as Pandit",
-    route: "/pandit-register",
-  },
-  {
-    icon: { ios: "building.columns.fill", android: "account_balance", web: "account_balance" },
-    label: "Register Mandir",
-    route: "/mandir-register",
+    icon: { ios: "list.bullet.rectangle", android: "receipt_long", web: "receipt_long" },
+    labelKey: "myBookingsMenu",
+    route: "/my-bookings",
   },
 ] as const;
 
@@ -215,6 +208,8 @@ export default function HomeScreen() {
   const [upcomingLoading, setUpcomingLoading] = useState(true);
   const [mandirs, setMandirs] = useState<Mandir[]>([]);
   const [mandirLoading, setMandirLoading] = useState(true);
+  const unreadCount = useUnreadNotificationsCount();
+  const translatedBanners = useTranslatedList(banners, ["title", "description"]);
 
   useEffect(() => {
     setLiveLoading(true);
@@ -327,6 +322,13 @@ export default function HomeScreen() {
                   tintColor="#FFFFFF"
                   size={20}
                 />
+                {unreadCount > 0 && (
+                  <View style={styles.notifBadge}>
+                    <ThemedText style={styles.notifBadgeText}>
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </ThemedText>
+                  </View>
+                )}
               </Pressable>
             </View>
           </View>
@@ -359,22 +361,31 @@ export default function HomeScreen() {
       >
         {/* Banner Slider */}
         <ImageSlider
-          slides={banners.map(b => ({
+          slides={translatedBanners.map(b => ({
             id: b.id,
             uri: `${getApiBaseUrl()}/${Platform.OS === 'web' ? b.desktop_image : b.mobile_image}`,
             title: b.title,
             description: b.description,
             buttonText: b.buttons?.[0]?.button_text || 'Book Now',
           }))}
-          onPress={b => router.push({ pathname: '/banner-detail', params: { id: b.id } })}
+          onPress={b => {
+            if (b.id) {
+              const banner = translatedBanners.find(tb => tb.id === b.id);
+              if (banner?.banner_for === 'PUJA BOOKING' && banner?.reference_id) {
+                router.push({ pathname: '/group-puja-detail', params: { id: banner.reference_id } });
+              } else {
+                router.push({ pathname: '/banner-detail', params: { id: b.id } });
+              }
+            }
+          }}
         />
 
         {/* Book Puja */}
-        <ThemedText style={styles.sectionTitle}>Book Puja</ThemedText>
+        <ThemedText style={styles.sectionTitle}>{t('bookPuja')}</ThemedText>
         <View style={{ gap: 8 }}>
           {/* Row 1: 2 cards */}
           <View style={styles.pujaCategRow}>
-            {([{ label: 'Group Puja', sub: 'Join Temple Pujas', img: require("@/assets/images/GroupPuja_bg.jpeg"), type: 'group' }, { label: 'Individual Puja', sub: 'Personalized Sankalp', img: require("@/assets/images/indivisualPuaj_bg.jpeg"), type: 'individual' }] as const).map((cat) => (
+            {([{ label: t('groupPuja'), sub: t('joinTemplePujas'), img: require("@/assets/images/GroupPuja_bg.jpeg"), type: 'group' }, { label: t('individualPuja'), sub: t('personalizedSankalp'), img: require("@/assets/images/indivisualPuaj_bg.jpeg"), type: 'individual' }] as const).map((cat) => (
               <Pressable
                 key={cat.label}
                 onPress={() => router.push({ pathname: "/group-puja-list", params: { type: cat.type } })}
@@ -411,61 +422,63 @@ export default function HomeScreen() {
               style={StyleSheet.absoluteFill}
             />
             <View style={styles.lokpriyaBadge}>
-              <ThemedText style={styles.lokpriyaBadgeText}>⭐ Most Booked</ThemedText>
+              <ThemedText style={styles.lokpriyaBadgeText}>{t('mostBooked')}</ThemedText>
             </View>
             <View style={styles.lokpriyaBottom}>
               <View style={{ flex: 1 }}>
-                <ThemedText style={styles.lokpriyaTitle}>⭐ Lokpriya Puja</ThemedText>
-                <ThemedText style={styles.lokpriyaSub}>Most Booked • Premium Ritual</ThemedText>
+                <ThemedText style={styles.lokpriyaTitle}>{t('lokpriyaPuja')}</ThemedText>
+                <ThemedText style={styles.lokpriyaSub}>{t('mostBookedPremium')}</ThemedText>
               </View>
               <View style={styles.lokpriyaBookBtn}>
-                <ThemedText style={styles.lokpriyaBookBtnText}>Book Now</ThemedText>
+                <ThemedText style={styles.lokpriyaBookBtnText}>{t('bookNowBtn')}</ThemedText>
               </View>
             </View>
           </Pressable>
         </View>
 
-        {/* Live Services */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.liveSectionTitleRow}>
-            <View style={styles.liveDotIndicator} />
-            <ThemedText style={styles.sectionTitle}>
-              {t("liveServices")}
-            </ThemedText>
-          </View>
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/broadcasts-list",
-                params: { type: "live" },
-              })
-            }
-            style={({ pressed }) => [pressed && styles.pressed]}
-          >
-            <ThemedText style={styles.seeAll}>See all ›</ThemedText>
-          </Pressable>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.hScroll}
-          contentContainerStyle={styles.hScrollContent}
-        >
-          {liveLoading ? (
-            [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
-          ) : liveItems.length > 0 ? (
-            liveItems.map((item, i) => (
-              <LiveServiceCard
-                key={item.id}
-                item={item}
-                bg={LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]}
-                emoji={LIVE_EMOJIS[i % LIVE_EMOJIS.length]}
-              />
-            ))
-          ) : (
-            <NoDataFound label="No live services right now" emoji="📺" />
-          )}
-        </ScrollView>
+        {/* Live Services — only shown while an event is ongoing */}
+        {(liveLoading || liveItems.length > 0) && (
+          <>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.liveSectionTitleRow}>
+                <View style={styles.liveDotIndicator} />
+                <ThemedText style={styles.sectionTitle}>
+                  {t("liveServices")}
+                </ThemedText>
+              </View>
+              <Pressable
+                onPress={() =>
+                  router.push({
+                    pathname: "/broadcasts-list",
+                    params: { type: "live" },
+                  })
+                }
+                style={({ pressed }) => [pressed && styles.pressed]}
+              >
+                <ThemedText style={styles.seeAll}>See all ›</ThemedText>
+              </Pressable>
+            </View>
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.hScroll}
+              contentContainerStyle={styles.hScrollContent}
+            >
+              {liveLoading ? (
+                [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
+              ) : (
+                liveItems.map((item, i) => (
+                  <LiveServiceCard
+                    key={item.id}
+                    item={item}
+                    bg={LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]}
+                    emoji={LIVE_EMOJIS[i % LIVE_EMOJIS.length]}
+                  />
+                ))
+              )}
+            </ScrollView>
+          </>
+        )}
 
         {/* Upcoming Events */}
         <View style={styles.eventsHeaderRow}>
@@ -502,7 +515,7 @@ export default function HomeScreen() {
               />
             ))
           ) : (
-            <NoDataFound label="No upcoming events" emoji="📅" />
+            <NoDataFound label={t('noUpcomingEvents')} emoji="📅" />
           )}
         </ScrollView>
 
@@ -552,7 +565,7 @@ export default function HomeScreen() {
               <MandirCard key={mandir.id} mandir={mandir} />
             ))
           ) : (
-            <NoDataFound label="No temples found" emoji="🛕" />
+            <NoDataFound label={t('noTemplesFound')} emoji="🛕" />
           )}
         </ScrollView>
 
@@ -678,7 +691,7 @@ export default function HomeScreen() {
                     />
                   </View>
                   <ThemedText style={styles.sideMenuItemLabel}>
-                    {item.label}
+                    {t(item.labelKey as any)}
                   </ThemedText>
                   <SymbolView
                     name={{
@@ -691,6 +704,34 @@ export default function HomeScreen() {
                   />
                 </Pressable>
               ))}
+              <Pressable
+                onPress={async () => {
+                  closeSideMenu();
+                  await unregisterForPush();
+                  await TokenManager.clearToken();
+                  router.replace("/");
+                }}
+                style={({ pressed }) => [
+                  styles.sideMenuItem,
+                  styles.sideMenuItemDivider,
+                  pressed && styles.sideMenuItemPressed,
+                ]}
+              >
+                <View style={[styles.sideMenuIconBg, { backgroundColor: "#FEE2E2" }]}>
+                  <SymbolView
+                    name={{
+                      ios: "rectangle.portrait.and.arrow.right",
+                      android: "logout",
+                      web: "logout",
+                    }}
+                    tintColor="#DC2626"
+                    size={18}
+                  />
+                </View>
+                <ThemedText style={[styles.sideMenuItemLabel, { color: "#DC2626" }]}>
+                  {t('logout')}
+                </ThemedText>
+              </Pressable>
             </ScrollView>
           </Animated.View>
         </View>
@@ -834,7 +875,7 @@ function LiveServiceCard({
         }
         style={({ pressed }) => [styles.watchBtn, pressed && styles.pressed]}
       >
-        <ThemedText style={styles.watchBtnText}>▶ Watch</ThemedText>
+        <ThemedText style={styles.watchBtnText}>{t('watchBtn')}</ThemedText>
       </Pressable>
     </Pressable>
   );
@@ -1014,6 +1055,21 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   langIconText: { fontSize: 11, fontWeight: "800", color: "#FFFFFF" },
+  notifBadge: {
+    position: "absolute",
+    top: -2,
+    right: -2,
+    minWidth: 17,
+    height: 17,
+    borderRadius: 9,
+    paddingHorizontal: 3,
+    backgroundColor: "#DC2626",
+    borderWidth: 1.5,
+    borderColor: "#C95A0E",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  notifBadgeText: { fontSize: 9, fontWeight: "800", color: "#FFFFFF" },
 
   searchBar: {
     flexDirection: "row",

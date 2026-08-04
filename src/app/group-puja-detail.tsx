@@ -20,7 +20,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ImageSlider } from '@/components/image-slider';
 import { ApiService, TokenManager, type FAQ, type InitiatePujaBookingResponse, type PujaDetail, type PujaPackageInfo, type PujaProcess } from '@/constants/api';
 import { ENV_CONFIG, getApiBaseUrl } from '@/constants/environment';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useT, useTranslatedBatch, useTranslatedList } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -36,7 +37,9 @@ const BRAND = {
   bgLight: '#FFF8F0',
 };
 
-const TABS = ['About Puja', 'Benefits', 'Temple Details', 'Packages', 'Process', 'FAQs'];
+const TABS = [
+  'aboutPujaTab', 'benefitsTab', 'templeDetailsTab', 'packagesTab', 'processTab', 'faqsTab',
+] as const;
 
 /** Strip HTML tags for plain-text display */
 function stripHtml(html: string): string {
@@ -60,6 +63,7 @@ function resolveUrl(url: string): string {
 }
 
 export default function GroupPujaDetailScreen() {
+  const t = useT();
   const { id } = useLocalSearchParams<{ id: string }>();
   console.log('[GroupPujaDetail] received id:', id);
   const [puja, setPuja] = useState<PujaDetail | null>(null);
@@ -67,7 +71,7 @@ export default function GroupPujaDetailScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const mainScrollRef = useRef<ScrollView>(null);
   const sectionRefs = useRef<(View | null)[]>([]);
-  const sectionOffsets = useRef<number[]>([]);
+  const scrollNodeRef = useRef<number | null>(null);
   const [processes, setProcesses] = useState<PujaProcess[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
@@ -93,6 +97,19 @@ export default function GroupPujaDetailScreen() {
     ApiService.getFaqs().then(setFaqs);
     ApiService.getPujaPackageInfo().then(setPkgInfoItems);
   }, [id]);
+
+  const [title, description, mandirAddress, aboutHeader, aboutDetailsText, poojaDescriptionText] = useTranslatedBatch([
+    puja?.title,
+    puja?.description,
+    puja?.mandir_address,
+    puja?.about_header,
+    puja ? stripHtml(puja.about_details ?? '') : '',
+    puja ? stripHtml(puja.pooja_description ?? '') : '',
+  ]);
+  const translatedBenefits = useTranslatedList(puja?.benefits ?? [], ['header', 'description', 'category_name']);
+  const translatedPackages = useTranslatedList(puja?.packages ?? [], ['package_title', 'person_count_description']);
+  const translatedProcesses = useTranslatedList(processes, ['Title', 'Description']);
+  const translatedFaqs = useTranslatedList(faqs, ['Question', 'Answer']);
 
   if (loading) {
     return (
@@ -132,13 +149,60 @@ export default function GroupPujaDetailScreen() {
             </View>
             <View>
               <ThemedText style={styles.headerTitle}>Sanatan Seva Setu</ThemedText>
-              <ThemedText style={styles.headerSubtitle}>Puja Seva</ThemedText>
+              <ThemedText style={styles.headerSubtitle}>{t('pujaSeva')}</ThemedText>
             </View>
           </View>
         </View>
       </SafeAreaView>
 
-      <ScrollView ref={mainScrollRef} style={styles.scroll} showsVerticalScrollIndicator={false} stickyHeaderIndices={[4]}>
+      {/* Tabs — fixed outside ScrollView so they stay clickable on Android */}
+      <View style={styles.tabsSticky}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
+          {TABS.map((tab, i) => (
+            <Pressable
+              key={tab}
+              onPress={() => {
+                setActiveTab(i);
+                const section = sectionRefs.current[i];
+                if (!section || !mainScrollRef.current) return;
+                if (Platform.OS === 'web') {
+                  const node = (section as any)._nativeTag ?? (section as any);
+                  if (node?.scrollIntoView) {
+                    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  } else {
+                    (section as any).measureLayout?.(
+                      (mainScrollRef.current as any),
+                      (_x: number, y: number) => {
+                        mainScrollRef.current?.scrollTo({ y: y - 60, animated: true });
+                      },
+                      () => {},
+                    );
+                  }
+                } else {
+                  (section as any).measureLayout(
+                    (mainScrollRef.current as any),
+                    (_x: number, y: number) => {
+                      mainScrollRef.current?.scrollTo({ y: y - 60, animated: true });
+                    },
+                    () => {},
+                  );
+                }
+              }}
+              style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
+            >
+              <ThemedText style={[styles.tabText, activeTab === i && styles.tabTextActive]}>{t(tab as any)}</ThemedText>
+              {activeTab === i && <View style={styles.tabUnderline} />}
+            </Pressable>
+          ))}
+        </ScrollView>
+      </View>
+
+      <ScrollView
+        ref={mainScrollRef}
+        style={styles.scroll}
+        contentContainerStyle={Platform.OS === 'web' ? styles.scrollContentWeb : undefined}
+        showsVerticalScrollIndicator={false}
+      >
 
         {/* Image Slider */}
         {sliders.length > 0 ? (
@@ -170,12 +234,12 @@ export default function GroupPujaDetailScreen() {
 
         {/* Title + meta */}
         <View style={styles.section}>
-          <ThemedText style={styles.mainTitle}>{puja.title}</ThemedText>
-          <ThemedText style={styles.mainDesc}>{puja.description}</ThemedText>
+          <ThemedText style={styles.mainTitle}>{title}</ThemedText>
+          <ThemedText style={styles.mainDesc}>{description}</ThemedText>
 
           <View style={styles.metaRow}>
             <SymbolView name={{ ios: 'building.columns', android: 'account_balance', web: 'account_balance' }} tintColor={BRAND.primary} size={14} />
-            <ThemedText style={styles.metaText}>{puja.mandir_address}</ThemedText>
+            <ThemedText style={styles.metaText}>{mandirAddress}</ThemedText>
           </View>
           <View style={styles.metaRow}>
             <SymbolView name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }} tintColor={BRAND.primary} size={14} />
@@ -218,47 +282,23 @@ export default function GroupPujaDetailScreen() {
 
         {/* Devotees section removed */}
 
-        {/* Tabs — sticky wrapper */}
-        <View style={styles.tabsSticky}>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsRow}>
-            {TABS.map((tab, i) => (
-              <Pressable
-                key={tab}
-                onPress={() => {
-                  setActiveTab(i);
-                  const offset = sectionOffsets.current[i];
-                  if (offset !== undefined) {
-                    mainScrollRef.current?.scrollTo({ y: offset, animated: true });
-                  }
-                }}
-                style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
-              >
-                <ThemedText style={[styles.tabText, activeTab === i && styles.tabTextActive]}>{tab}</ThemedText>
-                {activeTab === i && <View style={styles.tabUnderline} />}
-              </Pressable>
-            ))}
-          </ScrollView>
-        </View>
-
         {/* About Puja */}
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[0] = r; }}
-          onLayout={e => { sectionOffsets.current[0] = e.nativeEvent.layout.y; }}
         >
-          <ThemedText style={styles.sectionHeading}>About Puja</ThemedText>
-          <ExpandableText text={puja.about_header ? `${puja.about_header}\n\n${stripHtml(puja.about_details ?? '')}` : stripHtml(puja.about_details ?? '')} fallback="No details available." />
+          <ThemedText style={styles.sectionHeading}>{t('aboutPujaTab')}</ThemedText>
+          <ExpandableText text={aboutHeader ? `${aboutHeader}\n\n${aboutDetailsText}` : aboutDetailsText} fallback={t('noDetails')} />
         </View>
 
         {/* Benefits */}
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[1] = r; }}
-          onLayout={e => { sectionOffsets.current[1] = e.nativeEvent.layout.y; }}
         >
-          <ThemedText style={styles.sectionHeading}>Benefits</ThemedText>
+          <ThemedText style={styles.sectionHeading}>{t('benefitsTab')}</ThemedText>
           <View style={{ gap: 14 }}>
-            {puja.benefits?.length > 0 ? puja.benefits.map(b => {
+            {translatedBenefits.length > 0 ? translatedBenefits.map(b => {
               const benefitImgUri = Platform.OS === 'web'
                 ? (b.desktop_image_url || b.mobile_image_url)
                 : (b.mobile_image_url || b.desktop_image_url);
@@ -278,7 +318,7 @@ export default function GroupPujaDetailScreen() {
                   </View>
                 </View>
               );
-            }) : <ThemedText style={styles.aboutText}>No benefits listed.</ThemedText>}
+            }) : <ThemedText style={styles.aboutText}>{t('noBenefits')}</ThemedText>}
           </View>
         </View>
 
@@ -286,23 +326,22 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[2] = r; }}
-          onLayout={e => { sectionOffsets.current[2] = e.nativeEvent.layout.y; }}
         >
-          <ThemedText style={styles.sectionHeading}>Temple Details</ThemedText>
+          <ThemedText style={styles.sectionHeading}>{t('templeDetailsTab')}</ThemedText>
           <View style={{ gap: 12 }}>
             {puja.mandir_image_url ? (
               <Image source={{ uri: resolveUrl(puja.mandir_image_url) }} style={styles.templeImg} contentFit="cover" />
             ) : null}
             <View style={styles.templeDetailRow}>
               <SymbolView name={{ ios: 'building.columns', android: 'account_balance', web: 'account_balance' }} tintColor={BRAND.primary} size={16} />
-              <ThemedText style={styles.templeDetailText}>{puja.mandir_address}</ThemedText>
+              <ThemedText style={styles.templeDetailText}>{mandirAddress}</ThemedText>
             </View>
             <View style={styles.templeDetailRow}>
               <SymbolView name={{ ios: 'calendar', android: 'calendar_month', web: 'calendar_month' }} tintColor={BRAND.primary} size={16} />
               <ThemedText style={styles.templeDetailText}>{formattedDate}</ThemedText>
             </View>
             {!!puja.pooja_description && (
-              <ExpandableText text={stripHtml(puja.pooja_description)} />
+              <ExpandableText text={poojaDescriptionText} />
             )}
           </View>
         </View>
@@ -311,11 +350,10 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[3] = r; }}
-          onLayout={e => { sectionOffsets.current[3] = e.nativeEvent.layout.y; }}
         >
-          <ThemedText style={styles.sectionHeading}>Packages</ThemedText>
+          <ThemedText style={styles.sectionHeading}>{t('packagesTab')}</ThemedText>
           <View style={{ gap: 12 }}>
-            {puja.packages?.length > 0 ? puja.packages.map((pkg, i) => {
+            {translatedPackages.length > 0 ? translatedPackages.map((pkg, i) => {
               const pkgImgUri = Platform.OS === 'web'
                 ? (pkg.desktop_image_url || pkg.mobile_image_url)
                 : (pkg.mobile_image_url || pkg.desktop_image_url);
@@ -328,7 +366,7 @@ export default function GroupPujaDetailScreen() {
                 >
                   {i === 0 && (
                     <View style={styles.popularBadge}>
-                      <ThemedText style={styles.popularBadgeText}>⭐ Most Popular</ThemedText>
+                      <ThemedText style={styles.popularBadgeText}>{t('mostPopular')}</ThemedText>
                     </View>
                   )}
                   <View style={styles.packageTopRow}>
@@ -342,7 +380,7 @@ export default function GroupPujaDetailScreen() {
                     <View style={{ flex: 1, gap: 4 }}>
                       <ThemedText style={styles.packageName}>{pkg.package_title}</ThemedText>
                       {pkg.person_count > 0 && (
-                        <ThemedText style={styles.packagePersons}>👥 {pkg.person_count} {pkg.person_count === 1 ? 'Person' : 'Persons'}</ThemedText>
+                        <ThemedText style={styles.packagePersons}>👥 {pkg.person_count} {pkg.person_count === 1 ? t('person') : t('persons')}</ThemedText>
                       )}
                       {!!pkg.person_count_description && (
                         <ThemedText style={styles.packageDesc}>{pkg.person_count_description}</ThemedText>
@@ -352,14 +390,14 @@ export default function GroupPujaDetailScreen() {
                       <ThemedText style={styles.packagePrice}>₹{pkg.price.toLocaleString()}</ThemedText>
                       {isSelected && (
                         <View style={styles.pkgSelectedBadge}>
-                          <ThemedText style={styles.pkgSelectedBadgeText}>✓ Selected</ThemedText>
+                          <ThemedText style={styles.pkgSelectedBadgeText}>{t('selected')}</ThemedText>
                         </View>
                       )}
                     </View>
                   </View>
                 </Pressable>
               );
-            }) : <ThemedText style={styles.aboutText}>No packages available.</ThemedText>}
+            }) : <ThemedText style={styles.aboutText}>{t('noPackages')}</ThemedText>}
           </View>
         </View>
 
@@ -367,11 +405,10 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[4] = r; }}
-          onLayout={e => { sectionOffsets.current[4] = e.nativeEvent.layout.y; }}
         >
-          <ThemedText style={styles.sectionHeading}>Process</ThemedText>
+          <ThemedText style={styles.sectionHeading}>{t('processTab')}</ThemedText>
           <View style={{ gap: 16 }}>
-            {processes.length > 0 ? processes.map((p, i) => (
+            {translatedProcesses.length > 0 ? translatedProcesses.map((p, i) => (
               <View key={p.Id} style={styles.processCard}>
                 <View style={styles.processStepBadge}>
                   <ThemedText style={styles.processStepNum}>{p.SerialNo}</ThemedText>
@@ -380,9 +417,9 @@ export default function GroupPujaDetailScreen() {
                   <ThemedText style={styles.processTitle}>{p.Title}</ThemedText>
                   <ThemedText style={styles.processDesc}>{p.Description}</ThemedText>
                 </View>
-                {i < processes.length - 1 && <View style={styles.processConnector} />}
+                {i < translatedProcesses.length - 1 && <View style={styles.processConnector} />}
               </View>
-            )) : <ThemedText style={styles.aboutText}>No process steps available.</ThemedText>}
+            )) : <ThemedText style={styles.aboutText}>{t('noProcess')}</ThemedText>}
           </View>
         </View>
 
@@ -390,11 +427,10 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[5] = r; }}
-          onLayout={e => { sectionOffsets.current[5] = e.nativeEvent.layout.y; }}
         >
-          <ThemedText style={styles.sectionHeading}>FAQs</ThemedText>
+          <ThemedText style={styles.sectionHeading}>{t('faqsTab')}</ThemedText>
           <View style={{ gap: 10 }}>
-            {faqs.filter(f => f.IsActive).length > 0 ? faqs.filter(f => f.IsActive).map(f => (
+            {translatedFaqs.filter(f => f.IsActive).length > 0 ? translatedFaqs.filter(f => f.IsActive).map(f => (
               <Pressable key={f.Id} onPress={() => setExpandedFaq(expandedFaq === f.Id ? null : f.Id)} style={({ pressed }) => [styles.faqCard, pressed && styles.pressed]}>
                 <View style={styles.faqHeader}>
                   <ThemedText style={styles.faqQuestion}>{f.Question}</ThemedText>
@@ -404,7 +440,7 @@ export default function GroupPujaDetailScreen() {
                   <ThemedText style={styles.faqAnswer}>{f.Answer}</ThemedText>
                 )}
               </Pressable>
-            )) : <ThemedText style={styles.aboutText}>No FAQs available.</ThemedText>}
+            )) : <ThemedText style={styles.aboutText}>{t('noFaqs')}</ThemedText>}
           </View>
         </View>
 
@@ -420,8 +456,8 @@ export default function GroupPujaDetailScreen() {
           }}
           style={({ pressed }) => [styles.selectPkgBtn, pressed && styles.pressed]}
         >
-          <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.selectPkgGradient}>
-            <ThemedText style={styles.selectPkgText}>🙏 Book This Puja</ThemedText>
+          <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.selectPkgGradient}>
+            <ThemedText style={styles.selectPkgText}>{t('bookThisPuja')}</ThemedText>
           </LinearGradient>
         </Pressable>
       </SafeAreaView>
@@ -436,15 +472,15 @@ export default function GroupPujaDetailScreen() {
               <SymbolView name={{ ios: 'chevron.left', android: 'arrow_back', web: 'arrow_back' }} tintColor={BRAND.text} size={20} />
             </Pressable>
             <View style={{ flex: 1 }}>
-              <ThemedText style={styles.modalTitle}>Book Puja</ThemedText>
-              <ThemedText style={styles.modalSubtitle} numberOfLines={1}>{puja.title}</ThemedText>
+              <ThemedText style={styles.modalTitle}>{t('bookPujaModal')}</ThemedText>
+              <ThemedText style={styles.modalSubtitle} numberOfLines={1}>{title}</ThemedText>
             </View>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
             {/* What's included */}
             {pkgInfoItems.length > 0 && (
               <View style={styles.modalSection}>
-                <ThemedText style={styles.modalSectionTitle}>✅ What's Included</ThemedText>
+                <ThemedText style={styles.modalSectionTitle}>{t('whatsIncluded')}</ThemedText>
                 <View style={styles.checkList}>
                   {pkgInfoItems.sort((a, b) => a.SerialNo - b.SerialNo).map(item => (
                     <View key={item.Id} style={styles.checkRow}>
@@ -459,16 +495,14 @@ export default function GroupPujaDetailScreen() {
             {/* Info banner */}
             <View style={styles.infoBanner}>
               <ThemedText style={styles.infoBannerIcon}>🎁</ThemedText>
-              <ThemedText style={styles.infoBannerText}>
-                Additional offerings like Vastra Daan, Anna Daan, Deep Daan available on payment page.
-              </ThemedText>
+              <ThemedText style={styles.infoBannerText}>{t('additionalOfferings')}</ThemedText>
             </View>
 
             {/* Select Package */}
             <View style={styles.modalSection}>
-              <ThemedText style={styles.modalSectionTitle}>📌 Select Package</ThemedText>
+              <ThemedText style={styles.modalSectionTitle}>{t('selectPackage')}</ThemedText>
               <View style={{ gap: 10 }}>
-                {(puja.packages ?? []).map((pkg) => {
+                {translatedPackages.map((pkg) => {
                   const isSelected = selectedPkgId === pkg.id;
                   const imgUri = Platform.OS === 'web'
                     ? (pkg.desktop_image_url || pkg.mobile_image_url)
@@ -489,7 +523,7 @@ export default function GroupPujaDetailScreen() {
                       <View style={{ flex: 1, gap: 3 }}>
                         <ThemedText style={[styles.pkgListName, isSelected && { color: BRAND.primary }]}>{pkg.package_title}</ThemedText>
                         {pkg.person_count > 0 && (
-                          <ThemedText style={styles.pkgListPersons}>👥 {pkg.person_count} {pkg.person_count === 1 ? 'Person' : 'Persons'}</ThemedText>
+                        <ThemedText style={styles.pkgListPersons}>👥 {pkg.person_count} {pkg.person_count === 1 ? t('person') : t('persons')}</ThemedText>
                         )}
                         {!!pkg.person_count_description && (
                           <ThemedText style={styles.pkgListDesc} numberOfLines={2}>{pkg.person_count_description}</ThemedText>
@@ -509,9 +543,9 @@ export default function GroupPujaDetailScreen() {
 
             {/* Trust badges */}
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.trustRow}>
-              {['✅ Money Back Guarantee', '🏷️ No Hidden Cost', '🔒 Secure Payment', '🛕 Official Temple Partner'].map(t => (
-                <View key={t} style={styles.trustBadge}>
-                  <ThemedText style={styles.trustBadgeText}>{t}</ThemedText>
+              {[t('moneyBack'), t('noHiddenCost'), t('securePayment'), t('officialTemple')].map(badge => (
+                <View key={badge} style={styles.trustBadge}>
+                  <ThemedText style={styles.trustBadgeText}>{badge}</ThemedText>
                 </View>
               ))}
             </ScrollView>
@@ -520,7 +554,7 @@ export default function GroupPujaDetailScreen() {
           {/* Proceed CTA */}
           <SafeAreaView edges={['bottom']} style={{ backgroundColor: BRAND.card }}>
           {selectedPkgId && (() => {
-            const sel = puja.packages?.find(p => p.id === selectedPkgId);
+            const sel = translatedPackages.find(p => p.id === selectedPkgId);
             if (!sel) return null;
             return (
               <View style={styles.modalFooter}>
@@ -571,10 +605,10 @@ export default function GroupPujaDetailScreen() {
                   disabled={initiating}
                   style={({ pressed }) => [styles.modalProceedBtn, pressed && styles.pressed]}
                 >
-                  <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.modalProceedGradient}>
+                  <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.modalProceedGradient}>
                     {initiating
                       ? <ActivityIndicator color="#FFFFFF" size="small" />
-                      : <ThemedText style={styles.modalProceedText}>Pay Now →</ThemedText>
+                      : <ThemedText style={styles.modalProceedText}>{t('payNow')}</ThemedText>
                     }
                   </LinearGradient>
                 </Pressable>
@@ -595,7 +629,7 @@ export default function GroupPujaDetailScreen() {
               <Pressable onPress={() => setRazorpayVisible(false)} style={({ pressed }) => [styles.backBtn, pressed && styles.pressed]}>
                 <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.text} size={18} />
               </Pressable>
-              <ThemedText style={styles.rzpHeaderTitle}>Complete Payment</ThemedText>
+              <ThemedText style={styles.rzpHeaderTitle}>{t('completePayment')}</ThemedText>
             </View>
             <RazorpayWebView
               html={buildRazorpayHtml(razorpayOrder, devoteeName, devoteeMobile)}
@@ -638,11 +672,11 @@ export default function GroupPujaDetailScreen() {
             <View style={styles.successIconWrap}>
               <SymbolView name={{ ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' }} tintColor="#16A34A" size={56} />
             </View>
-            <ThemedText style={styles.successTitle}>Payment Successful!</ThemedText>
-            <ThemedText style={styles.successMsg}>Your puja booking has been confirmed.</ThemedText>
+            <ThemedText style={styles.successTitle}>{t('paymentSuccessful')}</ThemedText>
+            <ThemedText style={styles.successMsg}>{t('pujaBookingConfirmed')}</ThemedText>
             {!!transactionId && (
               <View style={styles.txnRow}>
-                <ThemedText style={styles.txnLabel}>Transaction ID</ThemedText>
+                <ThemedText style={styles.txnLabel}>{t('transactionId')}</ThemedText>
                 <ThemedText style={styles.txnValue}>{transactionId}</ThemedText>
               </View>
             )}
@@ -650,7 +684,7 @@ export default function GroupPujaDetailScreen() {
               onPress={() => { setPaymentSuccess(false); router.replace('/(tabs)/home'); }}
               style={({ pressed }) => [styles.successBtn, pressed && styles.pressed]}
             >
-              <ThemedText style={styles.successBtnText}>Back to Home</ThemedText>
+              <ThemedText style={styles.successBtnText}>{t('backToHome')}</ThemedText>
             </Pressable>
           </View>
         </View>
@@ -740,9 +774,13 @@ const styles = StyleSheet.create({
   pressed: { opacity: 0.85 },
 
   scroll: { flex: 1 },
+  scrollContentWeb: { maxWidth: MaxContentWidth, alignSelf: 'center', width: '100%' } as any,
 
   sliderWrap: { position: 'relative' },
-  mainImg: { width: '100%', height: 220 },
+  mainImg: {
+    width: '100%',
+    ...(Platform.OS === 'web' ? { aspectRatio: 16 / 9 } : { height: 220 }),
+  },
 
   typePillsRow: { flexDirection: 'row', gap: 8, paddingHorizontal: Spacing.three, paddingTop: 12, flexWrap: 'wrap' },
   typePill: { backgroundColor: '#FFF1DE', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5, borderWidth: 1, borderColor: BRAND.border },
@@ -868,8 +906,9 @@ const styles = StyleSheet.create({
     backgroundColor: BRAND.card,
     width: '100%',
     ...(Platform.OS === 'web' ? {
-      maxWidth: 460,
-      maxHeight: '80%' as any,
+      maxWidth: 680,
+      maxHeight: '92%' as any,
+      height: '92%' as any,
       borderRadius: 16,
       overflow: 'hidden' as const,
     } : {

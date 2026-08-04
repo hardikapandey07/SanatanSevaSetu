@@ -115,7 +115,13 @@ export default function BannerDetailScreen() {
                 .map((btn, i) => (
                   <Pressable
                     key={btn.id}
-                    onPress={() => Linking.openURL(btn.button_link)}
+                    onPress={() => {
+                      if (banner?.banner_for === 'PUJA BOOKING' && banner?.reference_id) {
+                        router.push({ pathname: '/group-puja-detail', params: { id: banner.reference_id } });
+                      } else {
+                        Linking.openURL(btn.button_link);
+                      }
+                    }}
                     style={({ pressed }) => [
                       i === 0 ? styles.btnPrimary : styles.btnSecondary,
                       pressed && styles.pressed,

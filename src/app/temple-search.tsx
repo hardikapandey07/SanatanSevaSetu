@@ -106,7 +106,7 @@ export default function TempleSearchScreen() {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Search by temple name..."
+              placeholder={t('searchByTemple')}
               placeholderTextColor={BRAND.textSecondary}
               style={styles.searchInput}
             />
@@ -135,9 +135,7 @@ export default function TempleSearchScreen() {
         {loading ? (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={BRAND.primary} />
-            <ThemedText style={styles.loadingText}>
-              Loading temples...
-            </ThemedText>
+            <ThemedText style={styles.loadingText}>{t('loadingTemples')}</ThemedText>
           </View>
         ) : error ? (
           <View style={styles.centerBox}>
@@ -154,13 +152,13 @@ export default function TempleSearchScreen() {
                 pressed && styles.pressed,
               ]}
             >
-              <ThemedText style={styles.retryText}>Retry</ThemedText>
+            <ThemedText style={styles.retryText}>{t('retry')}</ThemedText>
             </Pressable>
           </View>
         ) : mandirs.length === 0 ? (
           <View style={styles.centerBox}>
             <ThemedText style={styles.errorEmoji}>🛕</ThemedText>
-            <ThemedText style={styles.errorText}>No temples found</ThemedText>
+            <ThemedText style={styles.errorText}>{t('noTemplesFoundSearch')}</ThemedText>
           </View>
         ) : filtered.length === 0 ? (
           <View style={styles.centerBox}>
@@ -220,7 +218,7 @@ function TempleCard({ mandir, t }: { mandir: Mandir; t: (k: any) => string }) {
             </ThemedText>
             {mandir.is_verify && (
               <View style={styles.verifiedBadge}>
-                <ThemedText style={styles.verifiedText}>✓ Verified</ThemedText>
+                <ThemedText style={styles.verifiedText}>{t('verified')}</ThemedText>
               </View>
             )}
           </View>
@@ -233,7 +231,7 @@ function TempleCard({ mandir, t }: { mandir: Mandir; t: (k: any) => string }) {
                 size={11}
               />
               <ThemedText style={styles.templeMeta} numberOfLines={1}>
-                Chadhava: {chadhava}
+                {t('chadhava')}: {chadhava}
               </ThemedText>
             </View>
           ) : null}
@@ -275,7 +273,7 @@ function TempleCard({ mandir, t }: { mandir: Mandir; t: (k: any) => string }) {
 
       {pujaCentre && pujaCentre !== 'Not Applicable' ? (
         <View style={styles.pujaCentreRow}>
-          <ThemedText style={styles.pujaCentreLabel}>Puja Centre: </ThemedText>
+          <ThemedText style={styles.pujaCentreLabel}>{t('pujaCentre')}: </ThemedText>
           <ThemedText style={styles.pujaCentreValue}>
             {pujaCentre}
           </ThemedText>

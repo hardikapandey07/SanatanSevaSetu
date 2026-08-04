@@ -117,9 +117,7 @@ export default function LanguageSettingsScreen() {
 
         <View style={styles.infoSection}>
           <ThemedText style={styles.infoTitle}>{t('languageInfo')}</ThemedText>
-          <ThemedText style={styles.infoText}>
-            Your selected language preference will be saved and applied across the entire app.
-          </ThemedText>
+          <ThemedText style={styles.infoText}>{t('langInfoText')}</ThemedText>
         </View>
       </ScrollView>
 

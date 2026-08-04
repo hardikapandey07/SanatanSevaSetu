@@ -18,13 +18,14 @@ import { Image } from 'expo-image';
 
 import { ThemedText } from '@/components/themed-text';
 import { ApiService, type ExtraField, type PujaInfo } from '@/constants/api';
-import { Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
+import { useT, useTranslatedList } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
   primaryDark: '#C95A0E',
-  green: '#22C55E',
-  greenDark: '#16A34A',
+  green: '#E8731C',
+  greenDark: '#C95A0E',
   bg: '#F7F4EE',
   card: '#FFFFFF',
   border: '#EFE7D7',
@@ -45,6 +46,7 @@ type PujaType = 'Individual' | 'Group' | 'Lokpriya';
 type FilterType = 'Deity' | 'Tithis' | 'Dosha' | 'Benefits' | 'Location';
 
 export default function GroupPujaListScreen() {
+  const t = useT();
   const params = useLocalSearchParams<{ type?: string }>();
   const rawType = params.type ?? 'group';
 
@@ -53,8 +55,8 @@ export default function GroupPujaListScreen() {
     rawType === 'lokpriya'   ? 'Lokpriya'   : 'Group';
 
   const title =
-    pujaType === 'Individual' ? 'Individual Puja' :
-    pujaType === 'Lokpriya'   ? 'Lokpriya Puja'   : 'Group Puja';
+    pujaType === 'Individual' ? t('individualPuja') :
+    pujaType === 'Lokpriya'   ? t('lokpriyaPuja')   : t('groupPuja');
 
   // Data
   const [allPujas, setAllPujas] = useState<PujaInfo[]>([]);
@@ -227,6 +229,8 @@ export default function GroupPujaListScreen() {
 
   const hasActiveFilter = !!(selectedDeity || selectedDosha || selectedTithi || selectedBenefit || selectedLocation);
 
+  const translatedPujas = useTranslatedList(filteredPujas, ['title', 'subtitle', 'description', 'mandir_address']);
+
   return (
     <View style={styles.root}>
       <SafeAreaView edges={['top']} style={styles.headerSafe}>
@@ -245,7 +249,7 @@ export default function GroupPujaListScreen() {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder={`Search for ${title}`}
+              placeholder={`${t('searchPlaceholder')} ${title}`}
               placeholderTextColor={BRAND.textSecondary}
               style={styles.searchInput}
             />
@@ -272,7 +276,7 @@ export default function GroupPujaListScreen() {
           <View style={styles.fpContainer}>
             {/* Header */}
             <View style={styles.fpHeader}>
-              <ThemedText style={styles.fpHeaderTitle}>Filters</ThemedText>
+              <ThemedText style={styles.fpHeaderTitle}>{t('filters')}</ThemedText>
               <Pressable onPress={() => setFilterPanelOpen(false)} style={({ pressed }) => [styles.fpCloseBtn, pressed && styles.pressed]}>
                 <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.textSecondary} size={16} />
               </Pressable>
@@ -330,11 +334,11 @@ export default function GroupPujaListScreen() {
             {/* Footer */}
             <View style={styles.fpFooter}>
               <Pressable onPress={clearDraft} style={({ pressed }) => [styles.fpClearBtn, pressed && styles.pressed]}>
-                <ThemedText style={styles.fpClearBtnText}>Clear All</ThemedText>
+                <ThemedText style={styles.fpClearBtnText}>{t('clearAll')}</ThemedText>
               </Pressable>
               <Pressable onPress={applyDraft} style={({ pressed }) => [styles.fpDoneBtn, pressed && styles.pressed]}>
                 <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.fpDoneGradient}>
-                  <ThemedText style={styles.fpDoneText}>Done{totalDraftCount > 0 ? ` (${totalDraftCount})` : ''}</ThemedText>
+                  <ThemedText style={styles.fpDoneText}>{t('done')}{totalDraftCount > 0 ? ` (${totalDraftCount})` : ''}</ThemedText>
                 </LinearGradient>
               </Pressable>
             </View>
@@ -349,17 +353,17 @@ export default function GroupPujaListScreen() {
         <View style={styles.emptyWrap}>
           <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
           <ThemedText style={styles.emptyText}>
-            {hasActiveFilter ? 'No pujas match this filter' : 'No pujas found'}
+            {hasActiveFilter ? t('noPujasFilter') : t('noPujasFound')}
           </ThemedText>
           {hasActiveFilter && (
             <Pressable onPress={clearFilters} style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
-              <ThemedText style={styles.clearBtnText}>Clear Filters</ThemedText>
+              <ThemedText style={styles.clearBtnText}>{t('clearFilters')}</ThemedText>
             </Pressable>
           )}
         </View>
       ) : (
         <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-          {filteredPujas.map((puja, i) => (
+          {translatedPujas.map((puja, i) => (
             <PujaCard key={puja.id} puja={puja} gradientIndex={i} />
           ))}
         </ScrollView>
@@ -370,6 +374,7 @@ export default function GroupPujaListScreen() {
 
 // ── Puja Card ─────────────────────────────────────────────────────────────────
 function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: number }) {
+  const t = useT();
   const gradient = BANNER_GRADIENTS[gradientIndex % BANNER_GRADIENTS.length];
   const imgUri = Platform.OS === 'web'
     ? (puja.desktop_image || puja.mobile_image)
@@ -426,7 +431,7 @@ function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: numb
         style={({ pressed }) => [styles.participateBtn, pressed && styles.pressed]}
       >
         <LinearGradient colors={[BRAND.green, BRAND.greenDark]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }} style={styles.participateBtnGradient}>
-          <ThemedText style={styles.participateBtnText}>PARTICIPATE  ›</ThemedText>
+          <ThemedText style={styles.participateBtnText}>{t('participate')}</ThemedText>
         </LinearGradient>
 
       </Pressable>
@@ -563,14 +568,20 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 15, color: BRAND.textSecondary, fontWeight: '600' },
 
   scroll: { flex: 1 },
-  scrollContent: { padding: Spacing.three, gap: Spacing.three, paddingBottom: 40 },
+  scrollContent: {
+    padding: Spacing.three,
+    gap: Spacing.three,
+    paddingBottom: 40,
+    ...(Platform.OS === 'web' ? { maxWidth: MaxContentWidth, alignSelf: 'center', width: '100%' } as any : {}),
+  },
 
   card: { backgroundColor: BRAND.card, borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: BRAND.border },
   banner: {
-    height: 160,
+    width: '100%',
     overflow: 'hidden',
     justifyContent: 'flex-end',
     backgroundColor: '#1A1A2E',
+    ...(Platform.OS === 'web' ? { aspectRatio: 16 / 9 } : { height: 160 }),
   },
   bannerContent: {
     padding: 12,

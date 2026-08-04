@@ -7,7 +7,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
-import { useT } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -39,6 +39,10 @@ export default function EventDetailScreen() {
   const isFree = params.price === 'FREE';
   const imageUri = params.imageUri || null;
   const fallbackBg = params.bg || '#7A1F18';
+
+  const [title, subtitle, description, location] = useTranslatedBatch([
+    params.title, params.subtitle, params.description, params.location,
+  ]);
 
   const handleShare = async () => {
     try {
@@ -85,9 +89,9 @@ export default function EventDetailScreen() {
                 <ThemedText style={styles.priceText}>{params.price}</ThemedText>
               </View>
             </View>
-            <ThemedText style={styles.heroTitle}>{params.title}</ThemedText>
+            <ThemedText style={styles.heroTitle}>{title}</ThemedText>
             {!!params.subtitle && (
-              <ThemedText style={styles.heroSubtitle}>{params.subtitle}</ThemedText>
+              <ThemedText style={styles.heroSubtitle}>{subtitle}</ThemedText>
             )}
           </View>
         </View>
@@ -109,14 +113,14 @@ export default function EventDetailScreen() {
           {!!params.location && (
             <View style={styles.chip}>
               <ThemedText style={styles.chipIcon}>📍</ThemedText>
-              <ThemedText style={styles.chipText}>{params.location}</ThemedText>
+              <ThemedText style={styles.chipText}>{location}</ThemedText>
             </View>
           )}
           {params.isOnline !== undefined && (
             <View style={[styles.chip, styles.chipCategory]}>
               <ThemedText style={styles.chipIcon}>{params.isOnline === 'true' ? '💻' : '🏛️'}</ThemedText>
               <ThemedText style={[styles.chipText, { color: BRAND.primary }]}>
-                {params.isOnline === 'true' ? 'Online' : 'In-Person'}
+                {params.isOnline === 'true' ? t('online') : t('inPerson')}
               </ThemedText>
             </View>
           )}
@@ -125,15 +129,15 @@ export default function EventDetailScreen() {
         {/* About */}
         {!!params.description && (
           <View style={styles.card}>
-            <ThemedText style={styles.aboutTitle}>About This Event</ThemedText>
-            <ThemedText style={styles.aboutText}>{params.description}</ThemedText>
+            <ThemedText style={styles.aboutTitle}>{t('aboutThisEvent')}</ThemedText>
+            <ThemedText style={styles.aboutText}>{description}</ThemedText>
           </View>
         )}
 
         {/* What to expect */}
         <View style={styles.card}>
-          <ThemedText style={styles.aboutTitle}>What to Expect</ThemedText>
-          {['Spiritual experience & divine blessings', 'Connect with fellow devotees', 'Receive prasad & blessings', 'Memorable devotional experience'].map((item, i) => (
+          <ThemedText style={styles.aboutTitle}>{t('whatToExpect')}</ThemedText>
+          {[t('expectItem1'), t('expectItem2'), t('expectItem3'), t('expectItem4')].map((item, i) => (
             <View key={i} style={styles.expectRow}>
               <View style={styles.expectDot} />
               <ThemedText style={styles.expectText}>{item}</ThemedText>
@@ -153,7 +157,7 @@ export default function EventDetailScreen() {
             start={{ x: 0, y: 0 }} end={{ x: 1, y: 0 }}
             style={styles.registerBtnGradient}>
             <ThemedText style={styles.registerBtnText}>
-              {isFree ? 'Register Free' : `Register · ${params.price}`}
+              {isFree ? t('registerFree') : `${t('register')} · ${params.price}`}
             </ThemedText>
           </LinearGradient>
         </Pressable>

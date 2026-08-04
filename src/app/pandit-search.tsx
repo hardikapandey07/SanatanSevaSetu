@@ -81,7 +81,7 @@ export default function PanditSearchScreen() {
             <ThemedText style={styles.filterTitle}>{t('filters')}</ThemedText>
             {hasFilters && (
               <Pressable onPress={() => { setPin(''); setExperience(''); setSpeciality(''); }} style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
-                <ThemedText style={styles.clearBtnText}>Clear</ThemedText>
+                <ThemedText style={styles.clearBtnText}>{t('clearFilter')}</ThemedText>
               </Pressable>
             )}
           </View>
@@ -115,13 +115,13 @@ export default function PanditSearchScreen() {
         {loading ? (
           <View style={styles.centerBox}>
             <ActivityIndicator size="large" color={BRAND.primary} />
-            <ThemedText style={styles.loadingText}>Loading pandits...</ThemedText>
+            <ThemedText style={styles.loadingText}>{t('loadingPandits')}</ThemedText>
           </View>
         ) : filtered.length === 0 ? (
           <View style={styles.centerBox}>
             <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
-            <ThemedText style={styles.emptyText}>No pandits found</ThemedText>
-            <ThemedText style={styles.emptySubText}>Try adjusting your filters</ThemedText>
+            <ThemedText style={styles.emptyText}>{t('noPanditsFound')}</ThemedText>
+            <ThemedText style={styles.emptySubText}>{t('adjustFilters')}</ThemedText>
           </View>
         ) : (
           filtered.map(p => (
@@ -153,7 +153,7 @@ function PanditCard({ pandit, t }: { pandit: Pandit; t: (k: any) => string }) {
             <ThemedText style={styles.panditName}>{panditName}</ThemedText>
             {pandit.IsVerify && (
               <View style={styles.verifiedBadge}>
-                <ThemedText style={styles.verifiedText}>✓ Verified</ThemedText>
+                <ThemedText style={styles.verifiedText}>{t('verified')}</ThemedText>
               </View>
             )}
           </View>

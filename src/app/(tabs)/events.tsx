@@ -28,8 +28,9 @@ const FILTERS: { key: Filter; emoji: string }[] = [
   { key: 'All',     emoji: '🙏' },
   { key: 'Free',    emoji: '🎁' },
   { key: 'Paid',    emoji: '💰' },
-  { key: 'Online',  emoji: '💻' },
-  { key: 'Offline', emoji: '📍' },
+  // Online / Offline tabs temporarily hidden
+  // { key: 'Online',  emoji: '💻' },
+  // { key: 'Offline', emoji: '📍' },
 ];
 
 const FALLBACK_COLORS = ['#7A1F18', '#1A3A5F', '#134E4A', '#4A1D96', '#7A3B1E'];
