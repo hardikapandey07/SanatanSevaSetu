@@ -10,6 +10,8 @@ import { ApiService, type Event } from '@/constants/api';
 import { getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
 import { useLanguage, useT, useTranslatedBatch } from '@/i18n/LanguageContext';
+import type { TranslationKey } from '@/i18n/translations';
+import { EmptyState } from '@/components/empty-state';
 
 const BRAND = {
   primary: '#E8731C',
@@ -24,13 +26,10 @@ const BRAND = {
 
 type Filter = 'All' | 'Free' | 'Paid' | 'Online' | 'Offline';
 
-const FILTERS: { key: Filter; emoji: string }[] = [
-  { key: 'All',     emoji: '🙏' },
-  { key: 'Free',    emoji: '🎁' },
-  { key: 'Paid',    emoji: '💰' },
-  // Online / Offline tabs temporarily hidden
-  // { key: 'Online',  emoji: '💻' },
-  // { key: 'Offline', emoji: '📍' },
+const FILTERS: { key: Filter; emoji: string; labelKey: TranslationKey }[] = [
+  { key: 'All',  emoji: '🙏', labelKey: 'filterAll'  },
+  { key: 'Free', emoji: '🎁', labelKey: 'filterFree' },
+  { key: 'Paid', emoji: '💰', labelKey: 'filterPaid' },
 ];
 
 const FALLBACK_COLORS = ['#7A1F18', '#1A3A5F', '#134E4A', '#4A1D96', '#7A3B1E'];
@@ -85,7 +84,7 @@ export default function EventsScreen() {
               ]}>
               <ThemedText style={styles.chipEmoji}>{f.emoji}</ThemedText>
               <ThemedText style={[styles.chipText, filter === f.key && styles.chipTextActive]}>
-                {f.key}
+                {t(f.labelKey)}
               </ThemedText>
             </Pressable>
           ))}
@@ -101,8 +100,7 @@ export default function EventsScreen() {
           showsVerticalScrollIndicator={false}>
           {filtered.length === 0 ? (
             <View style={styles.emptyWrap}>
-              <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
-              <ThemedText style={styles.emptyText}>No events found</ThemedText>
+              <EmptyState message={t('noEventsFound')} />
             </View>
           ) : (
             filtered.map((ev, i) => (

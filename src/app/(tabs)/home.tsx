@@ -29,8 +29,9 @@ import { unregisterForPush } from "@/constants/push";
 import { getApiBaseUrl } from "@/constants/environment";
 import { LANGUAGES } from "@/constants/languages";
 import { Spacing } from "@/constants/theme";
-import { useLanguage, useTranslatedBatch, useTranslatedList } from "@/i18n/LanguageContext";
+import { useLanguage, useT, useTranslatedBatch, useTranslatedList } from "@/i18n/LanguageContext";
 import { ImageSlider } from "@/components/image-slider";
+import { EmptyState } from "@/components/empty-state";
 import { useUnreadNotificationsCount } from "@/hooks/use-unread-notifications";
 import type { LangCode } from "@/i18n/translations";
 
@@ -436,49 +437,47 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* Live Services — only shown while an event is ongoing */}
-        {(liveLoading || liveItems.length > 0) && (
-          <>
-            <View style={styles.sectionHeaderRow}>
-              <View style={styles.liveSectionTitleRow}>
-                <View style={styles.liveDotIndicator} />
-                <ThemedText style={styles.sectionTitle}>
-                  {t("liveServices")}
-                </ThemedText>
-              </View>
-              <Pressable
-                onPress={() =>
-                  router.push({
-                    pathname: "/broadcasts-list",
-                    params: { type: "live" },
-                  })
-                }
-                style={({ pressed }) => [pressed && styles.pressed]}
-              >
-                <ThemedText style={styles.seeAll}>See all ›</ThemedText>
-              </Pressable>
-            </View>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              style={styles.hScroll}
-              contentContainerStyle={styles.hScrollContent}
-            >
-              {liveLoading ? (
-                [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
-              ) : (
-                liveItems.map((item, i) => (
-                  <LiveServiceCard
-                    key={item.id}
-                    item={item}
-                    bg={LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]}
-                    emoji={LIVE_EMOJIS[i % LIVE_EMOJIS.length]}
-                  />
-                ))
-              )}
-            </ScrollView>
-          </>
-        )}
+        {/* Live Services */}
+        <View style={styles.sectionHeaderRow}>
+          <View style={styles.liveSectionTitleRow}>
+            <View style={styles.liveDotIndicator} />
+            <ThemedText style={styles.sectionTitle}>
+              {t("liveServices")}
+            </ThemedText>
+          </View>
+          <Pressable
+            onPress={() =>
+              router.push({
+                pathname: "/broadcasts-list",
+                params: { type: "live" },
+              })
+            }
+            style={({ pressed }) => [pressed && styles.pressed]}
+          >
+            <ThemedText style={styles.seeAll}>See all ›</ThemedText>
+          </Pressable>
+        </View>
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.hScroll}
+          contentContainerStyle={styles.hScrollContent}
+        >
+          {liveLoading ? (
+            [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
+          ) : liveItems.length > 0 ? (
+            liveItems.map((item, i) => (
+              <LiveServiceCard
+                key={item.id}
+                item={item}
+                bg={LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]}
+                emoji={LIVE_EMOJIS[i % LIVE_EMOJIS.length]}
+              />
+            ))
+          ) : (
+            <NoDataFound label={t('noLiveNow')} emoji="📺" />
+          )}
+        </ScrollView>
 
         {/* Upcoming Events */}
         <View style={styles.eventsHeaderRow}>
@@ -647,10 +646,10 @@ export default function HomeScreen() {
               </View>
               <View style={{ flex: 1 }}>
                 <ThemedText style={styles.sideMenuBrand}>
-                  Sanatan Seva Setu
+                  {t('brand')}
                 </ThemedText>
                 <ThemedText style={styles.sideMenuTagline}>
-                  Bridging Devotion
+                  {t('brandTagline')}
                 </ThemedText>
               </View>
               <Pressable
@@ -672,7 +671,7 @@ export default function HomeScreen() {
             <ScrollView showsVerticalScrollIndicator={false}>
               {SIDE_MENU_ITEMS.map((item, i) => (
                 <Pressable
-                  key={item.label}
+                  key={item.labelKey}
                   onPress={() => {
                     closeSideMenu();
                     setTimeout(() => router.push(item.route as never), 250);
@@ -797,6 +796,7 @@ export default function HomeScreen() {
 function LiveServiceCard({
   item, bg, emoji,
 }: { item: Broadcast; bg: string; emoji: string }) {
+  const t = useT();
   const [title, subTitle] = useTranslatedBatch([item.title, item.sub_title]);
   const timeStr = (() => {
     try {
@@ -898,6 +898,17 @@ function UpcomingEventCard({
 
   return (
     <Pressable
+      onPress={() =>
+        router.push({
+          pathname: "/webinar-watch",
+          params: {
+            id: item.id,
+            title: item.title,
+            sub_title: item.sub_title,
+            is_paid: String(item.is_paid_event),
+          },
+        })
+      }
       style={({ pressed }) => [styles.upcomingCard, pressed && styles.pressed]}
     >
       <View style={[styles.upcomingImg, { backgroundColor: bg }]}>
@@ -975,13 +986,8 @@ function MandirCard({ mandir }: { mandir: Mandir }) {
   );
 }
 
-function NoDataFound({ label, emoji }: { label: string; emoji: string }) {
-  return (
-    <View style={styles.noDataWrap}>
-      <ThemedText style={styles.noDataEmoji}>{emoji}</ThemedText>
-      <ThemedText style={styles.noDataText}>{label}</ThemedText>
-    </View>
-  );
+function NoDataFound({ label }: { label: string; emoji?: string }) {
+  return <EmptyState message={label} />;
 }
 
 function BroadcastSkeleton() {

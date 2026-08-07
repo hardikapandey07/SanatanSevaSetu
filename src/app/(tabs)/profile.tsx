@@ -174,7 +174,7 @@ export default function ProfileScreen() {
                 tintColor="#FFFFFF"
                 size={14}
               />
-              <ThemedText style={styles.completePillText}>Complete your profile</ThemedText>
+              <ThemedText style={styles.completePillText}>{t('completeProfile')}</ThemedText>
               <SymbolView
                 name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
                 tintColor="rgba(255,255,255,0.8)"
@@ -200,7 +200,7 @@ export default function ProfileScreen() {
           ) : bookings.length === 0 ? (
             <View style={styles.emptyBookings}>
               <ThemedText style={styles.emptyBookingsEmoji}>🙏</ThemedText>
-              <ThemedText style={styles.emptyBookingsText}>No bookings yet</ThemedText>
+              <ThemedText style={styles.emptyBookingsText}>{t('noBookingsYet')}</ThemedText>
             </View>
           ) : (
             bookings.slice(0, 3).map((b, i) => {
@@ -234,7 +234,7 @@ export default function ProfileScreen() {
               tintColor={BRAND.primary}
               size={16}
             />
-            <ThemedText style={styles.viewAllBtnText}>View All Bookings</ThemedText>
+            <ThemedText style={styles.viewAllBtnText}>{t('viewAllBookings')}</ThemedText>
             <SymbolView
               name={{ ios: 'chevron.right', android: 'chevron_right', web: 'chevron_right' }}
               tintColor={BRAND.primary}
@@ -291,7 +291,7 @@ export default function ProfileScreen() {
               <View style={styles.modalHandle} />
 
               <View style={styles.modalHeader}>
-                <ThemedText style={styles.modalTitle}>Edit Profile</ThemedText>
+                <ThemedText style={styles.modalTitle}>{t('editProfile')}</ThemedText>
                 <Pressable onPress={() => setEditVisible(false)} style={({ pressed }) => [styles.modalCloseBtn, pressed && styles.pressed]}>
                   <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.textSecondary} size={16} />
                 </Pressable>
@@ -316,11 +316,11 @@ export default function ProfileScreen() {
 
               {/* Editable fields */}
               <View style={styles.modalField}>
-                <ThemedText style={styles.modalLabel}>Address *</ThemedText>
+                <ThemedText style={styles.modalLabel}>{t('addressLabel')} *</ThemedText>
                 <TextInput
                   value={editAddress}
                   onChangeText={setEditAddress}
-                  placeholder="Enter your full address"
+                  placeholder={t('addressPlaceholder')}
                   placeholderTextColor={BRAND.textSecondary}
                   multiline
                   numberOfLines={3}
@@ -331,11 +331,11 @@ export default function ProfileScreen() {
               </View>
 
               <View style={styles.modalField}>
-                <ThemedText style={styles.modalLabel}>Email ID (Optional)</ThemedText>
+                <ThemedText style={styles.modalLabel}>{t('emailOptional')}</ThemedText>
                 <TextInput
                   value={editEmail}
                   onChangeText={setEditEmail}
-                  placeholder="Enter your email"
+                  placeholder={t('emailPlaceholder')}
                   placeholderTextColor={BRAND.textSecondary}
                   keyboardType="email-address"
                   autoCapitalize="none"
@@ -360,7 +360,7 @@ export default function ProfileScreen() {
                   disabled={saving}
                   style={({ pressed }) => [styles.modalBtnSave, saving && styles.modalBtnDisabled, pressed && !saving && styles.pressed]}>
                   <ThemedText style={styles.modalBtnSaveText}>
-                    {saving ? 'Saving...' : 'Save Changes'}
+                    {saving ? t('saving') : t('saveChanges')}
                   </ThemedText>
                 </Pressable>
               </View>

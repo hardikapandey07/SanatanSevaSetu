@@ -19,6 +19,7 @@ import { ApiService, type Mandir } from "@/constants/api";
 import { getApiBaseUrl } from "@/constants/environment";
 import { Spacing } from "@/constants/theme";
 import { useT, useTranslatedBatch } from "@/i18n/LanguageContext";
+import { EmptyState } from '@/components/empty-state';
 
 const BRAND = {
   primary: "#E8731C",
@@ -156,17 +157,9 @@ export default function TempleSearchScreen() {
             </Pressable>
           </View>
         ) : mandirs.length === 0 ? (
-          <View style={styles.centerBox}>
-            <ThemedText style={styles.errorEmoji}>🛕</ThemedText>
-            <ThemedText style={styles.errorText}>{t('noTemplesFoundSearch')}</ThemedText>
-          </View>
+          <EmptyState message={t('noTemplesFoundSearch')} />
         ) : filtered.length === 0 ? (
-          <View style={styles.centerBox}>
-            <ThemedText style={styles.errorEmoji}>🔍</ThemedText>
-            <ThemedText style={styles.errorText}>
-              No temples match "{search}"
-            </ThemedText>
-          </View>
+          <EmptyState message={t('noResultsFound')} subMessage={search} />
         ) : (
           filtered.map((mandir) => (
             <TempleCard key={mandir.id} mandir={mandir} t={t} />

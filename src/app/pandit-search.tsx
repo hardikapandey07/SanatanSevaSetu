@@ -9,6 +9,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ApiService, type Pandit } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
 import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
+import { EmptyState } from '@/components/empty-state';
 
 const BRAND = {
   primary: '#E8731C',
@@ -118,11 +119,7 @@ export default function PanditSearchScreen() {
             <ThemedText style={styles.loadingText}>{t('loadingPandits')}</ThemedText>
           </View>
         ) : filtered.length === 0 ? (
-          <View style={styles.centerBox}>
-            <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
-            <ThemedText style={styles.emptyText}>{t('noPanditsFound')}</ThemedText>
-            <ThemedText style={styles.emptySubText}>{t('adjustFilters')}</ThemedText>
-          </View>
+          <EmptyState message={t('noPanditsFound')} subMessage={t('adjustFilters')} />
         ) : (
           filtered.map(p => (
             <PanditCard key={p.PanditId} pandit={p} t={t} />

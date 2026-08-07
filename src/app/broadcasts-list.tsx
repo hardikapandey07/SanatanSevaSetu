@@ -17,6 +17,7 @@ import { ThemedText } from '@/components/themed-text';
 import { ApiService, type Broadcast } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
 import { useT, useTranslatedBatch } from '@/i18n/LanguageContext';
+import { EmptyState } from '@/components/empty-state';
 
 const BRAND = {
   primary: '#E8731C',
@@ -126,12 +127,9 @@ export default function BroadcastsListScreen() {
       {loading ? (
         <ActivityIndicator size="large" color={BRAND.primary} style={{ marginTop: 48 }} />
       ) : filtered.length === 0 ? (
-        <View style={styles.emptyWrap}>
-          <ThemedText style={styles.emptyEmoji}>{isLive ? '📺' : '📅'}</ThemedText>
-          <ThemedText style={styles.emptyText}>
-            {search ? t('noResultsFound') : isLive ? t('noLiveNow') : t('noUpcomingEvents')}
-          </ThemedText>
-        </View>
+        <EmptyState
+          message={search ? t('noResultsFound') : isLive ? t('noLiveNow') : t('noUpcomingEvents')}
+        />
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}

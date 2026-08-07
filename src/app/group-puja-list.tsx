@@ -20,6 +20,8 @@ import { ThemedText } from '@/components/themed-text';
 import { ApiService, type ExtraField, type PujaInfo } from '@/constants/api';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useT, useTranslatedList } from '@/i18n/LanguageContext';
+import type { TranslationKey } from '@/i18n/translations';
+import { EmptyState } from '@/components/empty-state';
 
 const BRAND = {
   primary: '#E8731C',
@@ -288,13 +290,17 @@ export default function GroupPujaListScreen() {
                 {(['Deity', 'Tithis', 'Dosha', 'Benefits', 'Location'] as FilterType[]).map(cat => {
                   const count = getDraftSet(cat).set.size;
                   const isActive = activeCategory === cat;
+                  const catLabel: Record<FilterType, TranslationKey> = {
+                    Deity: 'deity', Tithis: 'tithi', Dosha: 'doshas',
+                    Benefits: 'benefitsTab', Location: 'address',
+                  };
                   return (
                     <Pressable
                       key={cat}
                       onPress={() => setActiveCategory(cat)}
                       style={[styles.fpCatItem, isActive && styles.fpCatItemActive]}
                     >
-                      <ThemedText style={[styles.fpCatText, isActive && styles.fpCatTextActive]}>{cat}</ThemedText>
+                      <ThemedText style={[styles.fpCatText, isActive && styles.fpCatTextActive]}>{t(catLabel[cat])}</ThemedText>
                       {count > 0 && (
                         <View style={styles.fpCatBadge}>
                           <ThemedText style={styles.fpCatBadgeText}>{count}</ThemedText>
@@ -351,10 +357,9 @@ export default function GroupPujaListScreen() {
         <ActivityIndicator size="large" color={BRAND.primary} style={{ marginTop: 40 }} />
       ) : filteredPujas.length === 0 ? (
         <View style={styles.emptyWrap}>
-          <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
-          <ThemedText style={styles.emptyText}>
-            {hasActiveFilter ? t('noPujasFilter') : t('noPujasFound')}
-          </ThemedText>
+          <EmptyState
+            message={hasActiveFilter ? t('noPujasFilter') : t('noPujasFound')}
+          />
           {hasActiveFilter && (
             <Pressable onPress={clearFilters} style={({ pressed }) => [styles.clearBtn, pressed && styles.pressed]}>
               <ThemedText style={styles.clearBtnText}>{t('clearFilters')}</ThemedText>
@@ -393,17 +398,8 @@ function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: numb
         {imgUri && (
           <Image source={{ uri: imgUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
         )}
-        <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(0,0,0,0.38)' }]} />
-        <View style={styles.bannerContent}>
-          <ThemedText style={styles.bannerTitle} numberOfLines={3}>{puja.title}</ThemedText>
-          <View style={styles.typePillsRow}>
-            {(puja.puja_types ?? []).map(tp => (
-              <View key={tp} style={styles.typePill}>
-                <ThemedText style={styles.typePillText}>{tp}</ThemedText>
-              </View>
-            ))}
-          </View>
-        </View>
+
+
       </View>
 
       <View style={styles.subtitleTagRow}>
@@ -412,7 +408,8 @@ function PujaCard({ puja, gradientIndex }: { puja: PujaInfo; gradientIndex: numb
 
       <View style={styles.cardBody}>
         <View style={styles.tithiRow}>
-          <ThemedText style={styles.tithiTag}>🔱 {puja.maas_paksh} • {puja.tithi}</ThemedText>
+          <ThemedText style={styles.tithiTag}>🔱 {puja.maas_paksh} • {puja.tithi}
+          </ThemedText>
         </View>
         <ThemedText style={styles.cardTitle}>{puja.title}</ThemedText>
         <ThemedText style={styles.cardDesc}>{puja.description}</ThemedText>

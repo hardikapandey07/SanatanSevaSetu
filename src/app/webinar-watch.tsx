@@ -147,7 +147,16 @@ export default function WebinarWatchScreen() {
     if (res.success) {
       setVerifySuccess(res.data?.message ?? 'Payment verified! Loading stream…');
       setTimeout(() => checkAccess(), 1500);
-    } else { setVerifyError(res.message); }
+    } else {
+      const msg = res.message;
+      setVerifyError(
+        typeof msg === 'string'
+          ? msg
+          : Array.isArray(msg)
+          ? (msg as any[])[0]?.msg ?? 'Verification failed.'
+          : 'Verification failed.',
+      );
+    }
   };
 
   // ── Loading ──

@@ -71,7 +71,8 @@ export default function GroupPujaDetailScreen() {
   const [activeTab, setActiveTab] = useState(0);
   const mainScrollRef = useRef<ScrollView>(null);
   const sectionRefs = useRef<(View | null)[]>([]);
-  const scrollNodeRef = useRef<number | null>(null);
+  const sectionOffsets = useRef<number[]>([]);
+  const isTabPress = useRef(false);
   const [processes, setProcesses] = useState<PujaProcess[]>([]);
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [expandedFaq, setExpandedFaq] = useState<string | null>(null);
@@ -163,30 +164,12 @@ export default function GroupPujaDetailScreen() {
               key={tab}
               onPress={() => {
                 setActiveTab(i);
-                const section = sectionRefs.current[i];
-                if (!section || !mainScrollRef.current) return;
-                if (Platform.OS === 'web') {
-                  const node = (section as any)._nativeTag ?? (section as any);
-                  if (node?.scrollIntoView) {
-                    node.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                  } else {
-                    (section as any).measureLayout?.(
-                      (mainScrollRef.current as any),
-                      (_x: number, y: number) => {
-                        mainScrollRef.current?.scrollTo({ y: y - 60, animated: true });
-                      },
-                      () => {},
-                    );
-                  }
-                } else {
-                  (section as any).measureLayout(
-                    (mainScrollRef.current as any),
-                    (_x: number, y: number) => {
-                      mainScrollRef.current?.scrollTo({ y: y - 60, animated: true });
-                    },
-                    () => {},
-                  );
+                isTabPress.current = true;
+                const offset = sectionOffsets.current[i];
+                if (offset != null) {
+                  mainScrollRef.current?.scrollTo({ y: offset - 8, animated: true });
                 }
+                setTimeout(() => { isTabPress.current = false; }, 800);
               }}
               style={({ pressed }) => [styles.tab, pressed && styles.pressed]}
             >
@@ -202,6 +185,20 @@ export default function GroupPujaDetailScreen() {
         style={styles.scroll}
         contentContainerStyle={Platform.OS === 'web' ? styles.scrollContentWeb : undefined}
         showsVerticalScrollIndicator={false}
+        scrollEventThrottle={16}
+        onScroll={e => {
+          if (isTabPress.current) return;
+          const y = e.nativeEvent.contentOffset.y;
+          const offsets = sectionOffsets.current;
+          let active = 0;
+          for (let i = offsets.length - 1; i >= 0; i--) {
+            if (offsets[i] != null && y >= offsets[i] - 40) {
+              active = i;
+              break;
+            }
+          }
+          setActiveTab(active);
+        }}
       >
 
         {/* Image Slider */}
@@ -251,7 +248,7 @@ export default function GroupPujaDetailScreen() {
             <View style={styles.metaRow}>
               <ThemedText style={styles.metaIcon}>🙏</ThemedText>
               <View style={{ flex: 1 }}>
-                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>Deities</ThemedText>
+                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>{t('deities')}</ThemedText>
                 <ThemedText style={styles.metaText}>{puja.deities.map(d => d.deity_name).join(', ')}</ThemedText>
               </View>
             </View>
@@ -262,7 +259,7 @@ export default function GroupPujaDetailScreen() {
             <View style={styles.metaRow}>
               <ThemedText style={styles.metaIcon}>🌙</ThemedText>
               <View style={{ flex: 1 }}>
-                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>Tithi</ThemedText>
+                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>{t('tithi')}</ThemedText>
                 <ThemedText style={styles.metaText}>{puja.tithi}{puja.maas_paksh ? ` • ${puja.maas_paksh}` : ''}</ThemedText>
               </View>
             </View>
@@ -273,7 +270,7 @@ export default function GroupPujaDetailScreen() {
             <View style={styles.metaRow}>
               <ThemedText style={styles.metaIcon}>✨</ThemedText>
               <View style={{ flex: 1 }}>
-                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>Doshas</ThemedText>
+                <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>{t('doshas')}</ThemedText>
                 <ThemedText style={styles.metaText}>{puja.doshas.map(d => d.dosha_name).join(', ')}</ThemedText>
               </View>
             </View>
@@ -286,6 +283,7 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[0] = r; }}
+          onLayout={e => { sectionOffsets.current[0] = e.nativeEvent.layout.y; }}
         >
           <ThemedText style={styles.sectionHeading}>{t('aboutPujaTab')}</ThemedText>
           <ExpandableText text={aboutHeader ? `${aboutHeader}\n\n${aboutDetailsText}` : aboutDetailsText} fallback={t('noDetails')} />
@@ -295,6 +293,7 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[1] = r; }}
+          onLayout={e => { sectionOffsets.current[1] = e.nativeEvent.layout.y; }}
         >
           <ThemedText style={styles.sectionHeading}>{t('benefitsTab')}</ThemedText>
           <View style={{ gap: 14 }}>
@@ -326,6 +325,7 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[2] = r; }}
+          onLayout={e => { sectionOffsets.current[2] = e.nativeEvent.layout.y; }}
         >
           <ThemedText style={styles.sectionHeading}>{t('templeDetailsTab')}</ThemedText>
           <View style={{ gap: 12 }}>
@@ -350,6 +350,7 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[3] = r; }}
+          onLayout={e => { sectionOffsets.current[3] = e.nativeEvent.layout.y; }}
         >
           <ThemedText style={styles.sectionHeading}>{t('packagesTab')}</ThemedText>
           <View style={{ gap: 12 }}>
@@ -405,6 +406,7 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[4] = r; }}
+          onLayout={e => { sectionOffsets.current[4] = e.nativeEvent.layout.y; }}
         >
           <ThemedText style={styles.sectionHeading}>{t('processTab')}</ThemedText>
           <View style={{ gap: 16 }}>
@@ -427,6 +429,7 @@ export default function GroupPujaDetailScreen() {
         <View
           style={styles.tabContent}
           ref={r => { sectionRefs.current[5] = r; }}
+          onLayout={e => { sectionOffsets.current[5] = e.nativeEvent.layout.y; }}
         >
           <ThemedText style={styles.sectionHeading}>{t('faqsTab')}</ThemedText>
           <View style={{ gap: 10 }}>
