@@ -2,14 +2,14 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { router, useLocalSearchParams } from 'expo-router';
 import * as ScreenOrientation from 'expo-screen-orientation';
 import { SymbolView } from 'expo-symbols';
-import QRCode from 'qrcode';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   Dimensions,
   FlatList,
   KeyboardAvoidingView,
-  Linking,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -20,8 +20,10 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import AgoraPlayer from '@/components/agora-player';
+import { RazorpayWebView } from '@/components/razorpay-webview';
 import { ThemedText } from '@/components/themed-text';
-import { ApiService, type BroadcastAccessResponse, type StreamInfo } from '@/constants/api';
+import { ApiService, TokenManager, type BroadcastAccessResponse, type BroadcastSubscribeResponse, type StreamInfo } from '@/constants/api';
+import { ENV_CONFIG } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
 import { useTranslatedBatch } from '@/i18n/LanguageContext';
 
@@ -51,10 +53,9 @@ export default function WebinarWatchScreen() {
   const [accessData, setAccessData] = useState<BroadcastAccessResponse | null>(null);
   const [streamInfo, setStreamInfo] = useState<StreamInfo | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [utr, setUtr] = useState('');
-  const [verifying, setVerifying] = useState(false);
-  const [verifyError, setVerifyError] = useState('');
-  const [verifySuccess, setVerifySuccess] = useState('');
+  // Razorpay
+  const [razorpayOrder, setRazorpayOrder] = useState<BroadcastSubscribeResponse | null>(null);
+  const [razorpayVisible, setRazorpayVisible] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [comments, setComments] = useState<{ id: string; text: string; time: string }[]>([]);
   const [commentText, setCommentText] = useState('');
@@ -62,6 +63,16 @@ export default function WebinarWatchScreen() {
   const [isLandscape, setIsLandscape] = useState(
     () => Dimensions.get('window').width > Dimensions.get('window').height
   );
+
+  // user profile for Razorpay prefill
+  const [userMobile, setUserMobile] = useState('');
+  const [userName, setUserName] = useState('');
+  useEffect(() => {
+    TokenManager.getUserProfile().then(p => {
+      setUserMobile(p.mobile);
+      setUserName(p.name);
+    });
+  }, []);
 
   // Listen for physical device rotation
   useEffect(() => {
@@ -112,12 +123,43 @@ export default function WebinarWatchScreen() {
   const checkAccess = async () => {
     if (!id) { setErrorMsg('Invalid event.'); setScreen('error'); return; }
     setScreen('loading');
+    // Step 1: check access
     const res = await ApiService.getBroadcastAccess(id);
     if (!res.data) { setErrorMsg('Could not check access. Please try again.'); setScreen('error'); return; }
     const data = res.data;
     setAccessData(data);
     const canStream = data.action === 'allow_stream' || data.status === 'authorized' || data.status === 'subscribed';
-    if (canStream) { await loadStreamInfo(); } else { setScreen('payment'); }
+    if (canStream && !data.payment_required) {
+      await loadStreamInfo();
+      return;
+    }
+    // Step 2: unauthorized — call subscribe
+    await processSubscribe();
+  };
+
+  const processSubscribe = async () => {
+    setScreen('loading');
+    const subRes = await ApiService.subscribeBroadcast(id);
+    // Already booked or free access granted
+    if (subRes.alreadyBooked || subRes.free) {
+      await loadStreamInfo();
+      return;
+    }
+    if (!subRes.success) {
+      setErrorMsg(subRes.message || 'Failed to initiate booking.');
+      setScreen('error');
+      return;
+    }
+    // Has razorpay_order_id — show payment gateway
+    if (subRes.data?.razorpay_order_id) {
+      setRazorpayOrder(subRes.data);
+      setRazorpayVisible(true);
+      setScreen('payment');
+      return;
+    }
+    // Fallback
+    setErrorMsg('Unexpected response from server.');
+    setScreen('error');
   };
 
   const loadStreamInfo = async () => {
@@ -137,27 +179,53 @@ export default function WebinarWatchScreen() {
     setTimeout(() => commentListRef.current?.scrollToEnd({ animated: true }), 100);
   };
 
-  const handleVerifyPayment = async () => {
-    if (!utr.trim()) { setVerifyError('Please enter the UTR / Transaction ID.'); return; }
-    setVerifying(true); setVerifyError(''); setVerifySuccess('');
-    const res = await ApiService.verifyBroadcastPayment({
-      event_id: id, payment_collected_for: 'EVENT BOOKING', utr: utr.trim(),
-    });
-    setVerifying(false);
-    if (res.success) {
-      setVerifySuccess(res.data?.message ?? 'Payment verified! Loading stream…');
-      setTimeout(() => checkAccess(), 1500);
-    } else {
-      const msg = res.message;
-      setVerifyError(
-        typeof msg === 'string'
-          ? msg
-          : Array.isArray(msg)
-          ? (msg as any[])[0]?.msg ?? 'Verification failed.'
-          : 'Verification failed.',
-      );
+  // Razorpay checkout finished — verify the signature server-side, then re-check access.
+  const handleRazorpayMessage = async (e: { nativeEvent: { data: string } }) => {
+    let msg: any;
+    try { msg = JSON.parse(e.nativeEvent.data); } catch { return; }
+
+    if (msg.type === 'payment_success') {
+      setRazorpayVisible(false);
+      setScreen('loading');
+      const verifyRes = await ApiService.verifyBroadcastRazorpayPayment({
+        razorpay_order_id: msg.razorpay_order_id,
+        razorpay_payment_id: msg.razorpay_payment_id,
+        razorpay_signature: msg.razorpay_signature,
+      });
+      if (verifyRes.success) {
+        await checkAccess();
+      } else {
+        setErrorMsg(verifyRes.message || 'Payment verification failed.');
+        setScreen('error');
+      }
+    } else if (msg.type === 'payment_failed') {
+      setRazorpayVisible(false);
+      setScreen('payment');
+      Alert.alert('Payment Failed', msg.description || 'Payment was not completed.');
+    } else if (msg.type === 'payment_dismissed') {
+      setRazorpayVisible(false);
+      setScreen('payment');
     }
   };
+
+  // Prefer the amount the subscribe API quoted; fall back to the UPI deep link.
+  const payAmount = razorpayOrder?.amount != null
+    ? String(razorpayOrder.amount)
+    : (accessData?.initiate_payment_url ?? '').match(/am=([\d.]+)/)?.[1] ?? '';
+
+  // Kept stable so the checkout page isn't re-written on unrelated re-renders.
+  const razorpayHtml = useMemo(
+    () => razorpayOrder?.razorpay_order_id
+      ? buildRazorpayHtml(
+          razorpayOrder.razorpay_order_id,
+          Number(payAmount) || 0,
+          translatedTitle || title || 'Live Stream Access',
+          userName,
+          userMobile,
+        )
+      : '',
+    [razorpayOrder?.razorpay_order_id, payAmount, translatedTitle, title, userName, userMobile],
+  );
 
   // ── Loading ──
   if (screen === 'loading') {
@@ -195,8 +263,7 @@ export default function WebinarWatchScreen() {
 
   // ── Payment required ──
   if (screen === 'payment') {
-    const upiUrl = accessData?.initiate_payment_url ?? '';
-    const amount = upiUrl.match(/am=([\d.]+)/)?.[1] ?? '';
+    const amount = payAmount;
     return (
       <View style={styles.root}>
         <LinearGradient colors={[BRAND.primary, BRAND.primaryDark]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }} style={styles.header}>
@@ -224,44 +291,39 @@ export default function WebinarWatchScreen() {
             <ThemedText style={styles.paymentNoticeDesc}>Complete the payment below to watch this live stream.</ThemedText>
           </View>
 
-          {Platform.OS !== 'web' && !!upiUrl && (
-            <View style={styles.card}>
-              <ThemedText style={styles.sectionTitle}>Pay via UPI App</ThemedText>
-              <ThemedText style={styles.hint}>Tap below to open your UPI app and complete the payment.</ThemedText>
-              <Pressable onPress={() => Linking.openURL(encodeURI(upiUrl)).catch(() => {})} style={({ pressed }) => [styles.cta, pressed && styles.pressed]}>
-                <SymbolView name={{ ios: 'iphone', android: 'smartphone', web: 'smartphone' }} tintColor="#FFFFFF" size={16} />
-                <ThemedText style={styles.ctaText}>Open UPI App</ThemedText>
-              </Pressable>
-            </View>
-          )}
-
-          {!!upiUrl && (
-            <View style={styles.card}>
-              <ThemedText style={styles.sectionTitle}>Scan QR to Pay</ThemedText>
-              <View style={styles.qrBox}>
-                <QrMatrix value={upiUrl} size={200} />
-                <ThemedText style={styles.qrHint}>Scan with GPay, PhonePe, Paytm or any UPI app</ThemedText>
-              </View>
-            </View>
-          )}
-
           <View style={styles.card}>
-            <ThemedText style={styles.sectionTitle}>Verify Payment</ThemedText>
-            <ThemedText style={styles.hint}>After paying, enter your UTR / Transaction Reference ID to unlock the stream.</ThemedText>
-            <TextInput
-              value={utr} onChangeText={setUtr}
-              placeholder="Enter UTR / Transaction ID"
-              placeholderTextColor={BRAND.textSecondary}
-              autoCapitalize="characters"
-              style={styles.input}
-            />
-            {!!verifyError && <View style={styles.errorBox}><ThemedText style={styles.errorBoxText}>{verifyError}</ThemedText></View>}
-            {!!verifySuccess && <View style={styles.successBox}><ThemedText style={styles.successBoxText}>{verifySuccess}</ThemedText></View>}
-            <Pressable onPress={handleVerifyPayment} disabled={verifying} style={({ pressed }) => [styles.cta, verifying && styles.ctaDisabled, pressed && !verifying && styles.pressed]}>
-              {verifying ? <ActivityIndicator color="#FFFFFF" size="small" /> : <ThemedText style={styles.ctaText}>Verify & Watch</ThemedText>}
+            <ThemedText style={styles.sectionTitle}>Secure Payment</ThemedText>
+            <ThemedText style={styles.hint}>Pay securely via UPI, cards, net banking or wallets. Your stream unlocks automatically once the payment is confirmed.</ThemedText>
+            <Pressable
+              onPress={() => (razorpayOrder?.razorpay_order_id ? setRazorpayVisible(true) : processSubscribe())}
+              style={({ pressed }) => [styles.cta, pressed && styles.pressed]}>
+              <ThemedText style={styles.ctaText}>{amount ? `Pay ₹${amount}` : 'Pay Now'}</ThemedText>
             </Pressable>
           </View>
         </ScrollView>
+
+        {/* Razorpay checkout — same WebView gateway used by the puja booking flow */}
+        {!!razorpayOrder?.razorpay_order_id && (
+          <Modal visible={razorpayVisible} animationType="slide" transparent onRequestClose={() => setRazorpayVisible(false)}>
+            <View style={styles.rzpModalBackdrop}>
+              <View style={styles.rzpModalContainer}>
+                <SafeAreaView edges={['top', 'bottom']} style={{ flex: 1, backgroundColor: '#FFFFFF' }}>
+                  <View style={styles.rzpHeader}>
+                    <Pressable onPress={() => setRazorpayVisible(false)} style={({ pressed }) => [styles.rzpCloseBtn, pressed && styles.pressed]}>
+                      <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor={BRAND.text} size={18} />
+                    </Pressable>
+                    <ThemedText style={styles.rzpHeaderTitle}>Complete Payment</ThemedText>
+                  </View>
+                  <RazorpayWebView
+                    html={razorpayHtml}
+                    style={{ flex: 1 }}
+                    onMessage={handleRazorpayMessage}
+                  />
+                </SafeAreaView>
+              </View>
+            </View>
+          </Modal>
+        )}
       </View>
     );
   }
@@ -412,26 +474,56 @@ export default function WebinarWatchScreen() {
   );
 }
 
-function QrMatrix({ value, size = 200 }: { value: string; size?: number }) {
-  const qr = useMemo(() => {
-    if (!value) return null;
-    try { return QRCode.create(value, { errorCorrectionLevel: 'M' }); }
-    catch { return null; }
-  }, [value]);
+function buildRazorpayHtml(
+  orderId: string,
+  amount: number,
+  eventTitle: string,
+  name: string,
+  mobile: string,
+): string {
+  const key = ENV_CONFIG.RAZORPAY_KEY_ID;
+  const amountInPaise = Math.round(amount * 100);
+  const desc = eventTitle.replace(/["<>]/g, '').slice(0, 80) || 'Live Stream Access';
+  const safeName = name.replace(/["<>]/g, '');
+  const safeMobile = mobile.replace(/["<>]/g, '');
+  const safeOrderId = String(orderId).trim();
 
-  if (!qr) return <ActivityIndicator size="large" color={BRAND.primary} />;
-  const count = qr.modules.size;
-  const cell = Math.floor(size / count);
-  const actual = cell * count;
-  const rows = [];
-  for (let r = 0; r < count; r++) {
-    const cells = [];
-    for (let c = 0; c < count; c++) {
-      cells.push(<View key={c} style={{ width: cell, height: cell, backgroundColor: qr.modules.data[r * count + c] ? '#000' : '#FFF' }} />);
-    }
-    rows.push(<View key={r} style={{ flexDirection: 'row' }}>{cells}</View>);
-  }
-  return <View style={{ width: actual, height: actual, backgroundColor: '#FFF' }}>{rows}</View>;
+  return (
+    '<!DOCTYPE html><html><head>' +
+    '<meta name="viewport" content="width=device-width,initial-scale=1">' +
+    '<style>' +
+    'body{margin:0;background:#F7F4EE;display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;font-family:sans-serif;gap:16px}' +
+    '.title{font-size:16px;font-weight:700;color:#1F1A14}' +
+    '.amt{font-size:26px;font-weight:900;color:#E8731C}' +
+    '.desc{font-size:13px;color:#6B6258;padding:0 24px;text-align:center}' +
+    '#rzp-button1{background:#E8731C;color:#fff;border:none;border-radius:12px;padding:16px 48px;font-size:16px;font-weight:700;cursor:pointer;letter-spacing:0.3px}' +
+    '#rzp-button1:active{opacity:0.85}' +
+    '</style></head><body>' +
+    '<div class="title">Sanatan Seva Setu</div>' +
+    '<div class="amt">₹' + amount.toLocaleString('en-IN') + '</div>' +
+    '<div class="desc">' + desc + '</div>' +
+    '<button id="rzp-button1">Pay Now</button>' +
+    '<script src="https://checkout.razorpay.com/v1/checkout.js"><\/script>' +
+    '<script>' +
+    'function postMsg(d){var m=JSON.stringify(d);if(window.ReactNativeWebView){window.ReactNativeWebView.postMessage(m);}else{window.parent.postMessage(m,"*");}}' +
+    'var options={' +
+    '"key":"' + key + '",' +
+    '"amount":"' + amountInPaise + '",' +
+    '"currency":"INR",' +
+    '"name":"Sanatan Seva Setu",' +
+    '"description":"' + desc + '",' +
+    '"order_id":"' + safeOrderId + '",' +
+    '"prefill":{"name":"' + safeName + '","contact":"' + safeMobile + '"},' +
+    '"notes":{"app":"SanatanSevaSetu"},' +
+    '"theme":{"color":"#E8731C"},' +
+    '"handler":function(r){postMsg({type:"payment_success",razorpay_order_id:r.razorpay_order_id,razorpay_payment_id:r.razorpay_payment_id,razorpay_signature:r.razorpay_signature});},' +
+    '"modal":{"ondismiss":function(){postMsg({type:"payment_dismissed"});}}' +
+    '};' +
+    'var rzp1=new Razorpay(options);' +
+    'document.getElementById("rzp-button1").onclick=function(e){rzp1.open();e.preventDefault();};' +
+    'rzp1.on("payment.failed",function(r){postMsg({type:"payment_failed",description:r.error.description});});' +
+    '<\/script></body></html>'
+  );
 }
 
 const styles = StyleSheet.create({
@@ -488,22 +580,15 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 15, fontWeight: '800', color: BRAND.text },
   hint: { fontSize: 13, color: BRAND.textSecondary, lineHeight: 18 },
-  qrBox: { alignItems: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 12, borderWidth: 1, borderColor: BRAND.border, padding: 16 },
-  qrHint: { fontSize: 12, color: BRAND.textSecondary, textAlign: 'center' },
-
-  input: {
-    borderWidth: 1.5, borderColor: BRAND.inputBorder, borderRadius: 10,
-    paddingHorizontal: 12, height: 46, fontSize: 14, color: BRAND.text, backgroundColor: '#FFFFFF',
-    ...(Platform.OS === 'web' ? ({ outlineWidth: 0, outlineStyle: 'none' } as object) : null),
-  },
-  errorBox: { backgroundColor: BRAND.errorBg, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#FCA5A5' },
-  errorBoxText: { fontSize: 13, color: BRAND.errorText, fontWeight: '600' },
-  successBox: { backgroundColor: BRAND.successBg, borderRadius: 8, padding: 10, borderWidth: 1, borderColor: '#BBF7D0' },
-  successBoxText: { fontSize: 13, color: BRAND.successText, fontWeight: '600' },
 
   cta: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, backgroundColor: BRAND.primary, borderRadius: 12, height: 48 },
-  ctaDisabled: { backgroundColor: '#CFC4B0' },
   ctaText: { color: '#FFFFFF', fontSize: 15, fontWeight: '700' },
+
+  rzpModalBackdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)' },
+  rzpModalContainer: { flex: 1, marginTop: 60, backgroundColor: '#FFFFFF', borderTopLeftRadius: 20, borderTopRightRadius: 20, overflow: 'hidden' },
+  rzpHeader: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingHorizontal: Spacing.three, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: BRAND.border },
+  rzpCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: '#F0EAE0', alignItems: 'center', justifyContent: 'center' },
+  rzpHeaderTitle: { flex: 1, fontSize: 16, fontWeight: '800', color: BRAND.text },
 
   // Comments
   commentsCard: {

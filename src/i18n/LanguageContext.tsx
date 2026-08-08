@@ -99,10 +99,16 @@ export function useTranslatedList<T extends Record<string, any>>(
     setResults(items);
     if (lang === 'en' || !items.length) return;
     const allTexts = items.flatMap(item => keys.map(k => String(item[k] ?? '')));
-    translateBatch(allTexts, lang).then(translated => {
+    // Blank fields (e.g. a null subtitle) are held back — including them makes the
+    // translate API reject the batch, leaving every row untranslated.
+    const indices = allTexts.map((v, i) => (v.trim() ? i : -1)).filter(i => i >= 0);
+    if (!indices.length) return;
+    translateBatch(indices.map(i => allTexts[i]), lang).then(translated => {
+      const merged = [...allTexts];
+      indices.forEach((origIdx, i) => { merged[origIdx] = translated[i] ?? allTexts[origIdx]; });
       const out = items.map((item, i) => {
         const copy = { ...item };
-        keys.forEach((k, ki) => { copy[k as string] = translated[i * keys.length + ki] as any; });
+        keys.forEach((k, ki) => { copy[k as string] = merged[i * keys.length + ki] as any; });
         return copy;
       });
       setResults(out);
@@ -124,9 +130,16 @@ export function useTranslatedBatch(texts: (string | null | undefined)[]): string
   useEffect(() => {
     setResults(safeTexts); // show originals immediately
     if (lang === 'en') return;
-    const nonEmpty = safeTexts.filter(Boolean);
-    if (!nonEmpty.length) return;
-    translateBatch(safeTexts, lang).then(setResults);
+    // Only send the non-empty entries — a blank string in the request makes the
+    // translate API reject the whole batch, which would leave every field
+    // untranslated. Results are spliced back into their original positions.
+    const indices = safeTexts.map((v, i) => (v.trim() ? i : -1)).filter(i => i >= 0);
+    if (!indices.length) return;
+    translateBatch(indices.map(i => safeTexts[i]), lang).then(translated => {
+      const out = [...safeTexts];
+      indices.forEach((origIdx, i) => { out[origIdx] = translated[i]; });
+      setResults(out);
+    });
   }, [texts.join('||'), lang]);
 
   return results;

@@ -19,7 +19,7 @@ import { ThemedText } from '@/components/themed-text';
 import { Spacing } from '@/constants/theme';
 import { ApiService, TokenManager, type UserBooking } from '@/constants/api';
 import { unregisterForPush } from '@/constants/push';
-import { useT } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch, useTranslatedList } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/translations';
 
 const BRAND = {
@@ -126,9 +126,22 @@ export default function ProfileScreen() {
     setEditVisible(false);
   };
 
-  const displayName   = userName   || 'NA';
+  // API-supplied profile text needs the same client-side translation as the rest
+  // of the dynamic content — the backend returns it verbatim in whatever language
+  // it was entered.
+  // Email is left as-is — it is an identifier, not prose.
+  const [translatedName, translatedAddress] = useTranslatedBatch([userName, address]);
+
+  // Only the three rows shown here; the full list is translated in /my-bookings.
+  const topBookings = bookings.slice(0, 3);
+  const translatedBookings = useTranslatedList(topBookings, ['title', 'booking_type']);
+  // Display-only: the raw status still drives the badge colour, so the mapping
+  // in bookingStatusStyle() can't be thrown off by a translated string.
+  const translatedStatuses = useTranslatedBatch(translatedBookings.map(b => b.status));
+
+  const displayName   = translatedName || 'NA';
   const displayMobile = userMobile ? `+91 ${userMobile.slice(0, 5)} ${userMobile.slice(5)}` : 'NA';
-  const avatarLetter  = userName   ? userName.charAt(0).toUpperCase() : '?';
+  const avatarLetter  = translatedName ? translatedName.charAt(0).toUpperCase() : '?';
   const profileComplete = !!address;
 
   return (
@@ -158,7 +171,7 @@ export default function ProfileScreen() {
               <ThemedText style={styles.profileName}>{displayName}</ThemedText>
               <ThemedText style={styles.profileMeta}>{displayMobile}</ThemedText>
               {!!address && (
-                <ThemedText style={styles.profileAddress} numberOfLines={1}>📍 {address}</ThemedText>
+                <ThemedText style={styles.profileAddress} numberOfLines={1}>📍 {translatedAddress}</ThemedText>
               )}
               {!!email && (
                 <ThemedText style={styles.profileMeta}>✉️ {email}</ThemedText>
@@ -203,10 +216,10 @@ export default function ProfileScreen() {
               <ThemedText style={styles.emptyBookingsText}>{t('noBookingsYet')}</ThemedText>
             </View>
           ) : (
-            bookings.slice(0, 3).map((b, i) => {
+            translatedBookings.map((b, i) => {
               const st = bookingStatusStyle(b.status);
               return (
-                <View key={b.id} style={[styles.bookingRow, i < Math.min(bookings.length, 3) - 1 && styles.divider]}>
+                <View key={b.id} style={[styles.bookingRow, i < translatedBookings.length - 1 && styles.divider]}>
                   <View style={{ flex: 1, gap: 3 }}>
                     <ThemedText style={styles.bookingTitle} numberOfLines={2}>{b.title}</ThemedText>
                     <View style={styles.bookingMetaRow}>
@@ -218,7 +231,7 @@ export default function ProfileScreen() {
                     <ThemedText style={styles.bookingAmount}>₹{b.amount.toLocaleString('en-IN')}</ThemedText>
                   </View>
                   <View style={[styles.statusBadge, { backgroundColor: st.bg }]}>
-                    <ThemedText style={[styles.statusText, { color: st.text }]}>{b.status}</ThemedText>
+                    <ThemedText style={[styles.statusText, { color: st.text }]}>{translatedStatuses[i] || b.status}</ThemedText>
                   </View>
                 </View>
               );

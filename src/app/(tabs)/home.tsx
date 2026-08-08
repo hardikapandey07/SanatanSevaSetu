@@ -367,7 +367,7 @@ export default function HomeScreen() {
             uri: `${getApiBaseUrl()}/${Platform.OS === 'web' ? b.desktop_image : b.mobile_image}`,
             title: b.title,
             description: b.description,
-            buttonText: b.buttons?.[0]?.button_text || 'Book Now',
+            buttonText: b.buttons?.[0]?.button_text || t('bookNowBtn'),
           }))}
           onPress={b => {
             if (b.id) {
@@ -1059,23 +1059,24 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.2)",
     alignItems: "center",
     justifyContent: "center",
+    overflow: "visible",
   },
   langIconText: { fontSize: 11, fontWeight: "800", color: "#FFFFFF" },
   notifBadge: {
     position: "absolute",
-    top: -2,
-    right: -2,
-    minWidth: 17,
-    height: 17,
+    top: -5,
+    right: -5,
+    minWidth: 18,
+    height: 18,
     borderRadius: 9,
-    paddingHorizontal: 3,
+    paddingHorizontal: 4,
     backgroundColor: "#DC2626",
     borderWidth: 1.5,
     borderColor: "#C95A0E",
     alignItems: "center",
     justifyContent: "center",
   },
-  notifBadgeText: { fontSize: 9, fontWeight: "800", color: "#FFFFFF" },
+  notifBadgeText: { fontSize: 10, fontWeight: "800", color: "#FFFFFF", lineHeight: 13 },
 
   searchBar: {
     flexDirection: "row",

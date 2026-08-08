@@ -76,30 +76,10 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 5000 }: Props) {
   }
 
   const Overlay = ({ slide }: { slide: Slide }) =>
-    slide.title || slide.description || slide.buttonText ? (
+    slide.buttonText ? (
       <View style={styles.overlay} pointerEvents="none">
-        <View style={styles.overlayInner}>
-          <View style={{ flex: 1 }}>
-            {!!slide.title && (
-              <ThemedText style={styles.overlayTitle} numberOfLines={2}>
-                {slide.title}
-              </ThemedText>
-            )}
-            {!!slide.description && (
-              <ThemedText style={styles.overlayDesc}>
-                {slide.description.split(' ').reduce((acc, word, i) => {
-                  const lineIdx = Math.floor(i / 4);
-                  acc[lineIdx] = acc[lineIdx] ? acc[lineIdx] + ' ' + word : word;
-                  return acc;
-                }, [] as string[]).join('\n')}
-              </ThemedText>
-            )}
-          </View>
-          {!!slide.buttonText && (
-            <View style={styles.overlayBtn}>
-              <ThemedText style={styles.overlayBtnText}>{slide.buttonText}</ThemedText>
-            </View>
-          )}
+        <View style={styles.overlayBtn}>
+          <ThemedText style={styles.overlayBtnText}>{slide.buttonText}</ThemedText>
         </View>
       </View>
     ) : null;
@@ -210,22 +190,11 @@ const styles = StyleSheet.create({
   wrap: { gap: 8 },
   placeholder: { borderRadius: 12, backgroundColor: '#E0D6C2', opacity: 0.4, width: '100%' },
   overlay: {
-    position: 'absolute', top: 0, bottom: 0,
-    left: '15%', right: 0,
-    paddingHorizontal: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
+    position: 'absolute', bottom: 16, right: 12,
   },
-  overlayInner: { flexDirection: 'column', alignItems: 'center', gap: 6 },
-  overlayTitle: {
-    fontSize: 16, fontWeight: '800', color: '#FFFFFF', lineHeight: 22,
-    textAlign: 'center',
-    textShadowColor: 'rgba(0,0,0,0.4)', textShadowOffset: { width: 0, height: 1 }, textShadowRadius: 3,
-  },
-  overlayDesc: { fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: '500', textAlign: 'center', lineHeight: 16 },
   overlayBtn: {
-    backgroundColor: PRIMARY, paddingHorizontal: 12, paddingVertical: 7,
-    borderRadius: 999, flexShrink: 0, marginTop: 4,
+    backgroundColor: PRIMARY, paddingHorizontal: 16, paddingVertical: 8,
+    borderRadius: 999, flexShrink: 0,
   },
   overlayBtnText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
   arrow: {

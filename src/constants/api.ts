@@ -49,6 +49,7 @@ export const API_CONFIG = {
     GET_LIVE_BROADCASTS: '/api/v1/broadcasts/live/public',
     GET_UPCOMING_BROADCASTS: '/api/v1/broadcasts/upcoming/public',
     BROADCAST_ACCESS: '/api/v1/broadcasts',       // POST /{id}/access
+    BROADCAST_SUBSCRIBE: '/api/v1/broadcasts/subscribe', // POST
     BROADCAST_STREAM_INFO: '/api/v1/broadcasts/live', // GET /{id}/stream-info
     BROADCAST_VERIFY_PAYMENT: '/api/v1/broadcasts/verify-payment',
     INITIATE_PUJA_BOOKING: '/api/v1/puja-bookings/initiate',
@@ -332,6 +333,14 @@ export type VerifyPaymentRequest = {
   event_id: string;
   payment_collected_for: string;
   utr: string;
+};
+
+export type BroadcastSubscribeResponse = {
+  razorpay_order_id?: string;
+  amount?: number;
+  status?: string;
+  message?: string;
+  detail?: string;
 };
 
 export type VerifyPaymentResponse = {
@@ -653,6 +662,41 @@ export class ApiService {
       const data = await r.json();
       return { success: r.ok || r.status === 402, data: data as BroadcastAccessResponse, status: r.status };
     } catch { return { success: false }; }
+  }
+
+  static async subscribeBroadcast(eventId: string): Promise<{ success: boolean; free?: boolean; alreadyBooked?: boolean; data?: BroadcastSubscribeResponse; message: string }> {
+    try {
+      const headers = await TokenManager.getAuthHeaders();
+      const url = `${this.baseUrl}${API_CONFIG.ENDPOINTS.BROADCAST_SUBSCRIBE}`;
+      const body = JSON.stringify({ event_id: eventId });
+      logCurl('POST', url, headers as Record<string, string>, body);
+      const r = await fetch(url, { method: 'POST', headers, body });
+      const data = await r.json() as BroadcastSubscribeResponse;
+      if (r.ok) {
+        if (data.razorpay_order_id) return { success: true, data, message: '' };
+        return { success: true, free: true, data, message: data.message ?? '' };
+      }
+      const detail = typeof data.detail === 'string' ? data.detail : (data.message ?? 'Failed to initiate booking.');
+      if (detail.toLowerCase().includes('already successfully booked')) {
+        return { success: true, alreadyBooked: true, message: detail };
+      }
+      return { success: false, message: detail };
+    } catch { return { success: false, message: 'Network error.' }; }
+  }
+
+  // Verifies a Razorpay payment made for a live broadcast subscription.
+  // Same endpoint as the puja flow, but sent with the user's auth headers.
+  static async verifyBroadcastRazorpayPayment(payload: VerifyPujaPaymentRequest): Promise<{ success: boolean; data?: VerifyPujaPaymentResponse; message: string }> {
+    try {
+      const headers = await TokenManager.getAuthHeaders();
+      const url = `${this.baseUrl}${API_CONFIG.ENDPOINTS.VERIFY_PUJA_PAYMENT}`;
+      const body = JSON.stringify(payload);
+      logCurl('POST', url, headers as Record<string, string>, body);
+      const r = await fetch(url, { method: 'POST', headers, body });
+      const data = await r.json();
+      if (r.ok) return { success: true, data: data as VerifyPujaPaymentResponse, message: data.message ?? '' };
+      return { success: false, message: data?.detail || data?.message || 'Payment verification failed.' };
+    } catch { return { success: false, message: 'Network error.' }; }
   }
 
   static async getStreamInfo(eventId: string): Promise<{ success: boolean; data?: StreamInfo }> {

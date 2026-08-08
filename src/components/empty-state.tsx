@@ -1,6 +1,7 @@
 import { Image } from 'expo-image';
 import { StyleSheet, View } from 'react-native';
 import { ThemedText } from '@/components/themed-text';
+import { useT } from '@/i18n/LanguageContext';
 
 type Props = {
   message: string;
@@ -8,6 +9,7 @@ type Props = {
 };
 
 export function EmptyState({ message, subMessage }: Props) {
+  const t = useT();
   return (
     <View style={styles.wrap}>
       <Image
@@ -15,7 +17,7 @@ export function EmptyState({ message, subMessage }: Props) {
         style={styles.img}
         contentFit="contain"
       />
-      <ThemedText style={styles.sorry}>Sorry!</ThemedText>
+      <ThemedText style={styles.sorry}>{t('sorry')}</ThemedText>
       <ThemedText style={styles.message}>{message}</ThemedText>
       {!!subMessage && <ThemedText style={styles.sub}>{subMessage}</ThemedText>}
     </View>

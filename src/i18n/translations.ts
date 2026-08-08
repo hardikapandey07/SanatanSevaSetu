@@ -470,6 +470,7 @@ export const TRANSLATIONS = {
     emailOptional: 'Email ID (Optional)',
     saving: 'Saving...',
     saveChanges: 'Save Changes',
+    sorry: 'Sorry!',
   },
   hi: {
     chooseLanguage: 'भाषा चुनें',
@@ -929,6 +930,7 @@ export const TRANSLATIONS = {
     emailOptional: 'ईमेल आईडी (वैकल्पिक)',
     saving: 'सहेज रहे हैं...',
     saveChanges: 'बदलाव सहेजें',
+    sorry: 'माफ़ करें!',
   },
   gu: {
     chooseLanguage: 'ભાષા પસંદ કરો',
@@ -1388,6 +1390,7 @@ export const TRANSLATIONS = {
     emailOptional: 'ઈમેઈલ આઈડી (વૈકલ્પિક)',
     saving: 'સાચવી રહ્યા છીએ...',
     saveChanges: 'ફેરફારો સાચવો',
+    sorry: 'માફ કરશો!',
   },
   mr: {
     chooseLanguage: 'भाषा निवडा',
@@ -1847,6 +1850,7 @@ export const TRANSLATIONS = {
     emailOptional: 'ईमेल आयडी (पर्यायी)',
     saving: 'सहेजत आहे...',
     saveChanges: 'बदल जतन करा',
+    sorry: 'माफ करा!',
   },
 } as const satisfies Record<LangCode, Record<string, string>>;
 
