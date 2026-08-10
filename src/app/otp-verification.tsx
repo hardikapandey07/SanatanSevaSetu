@@ -8,7 +8,9 @@ import { SymbolView } from 'expo-symbols';
 
 import { ThemedText } from '@/components/themed-text';
 import { MessageModal } from '@/components/message-modal';
+import { openExternalUrl } from '@/components/external-link';
 import { Spacing } from '@/constants/theme';
+import { LEGAL_URLS } from '@/constants/environment';
 import { ApiService } from '@/constants/api';
 import { registerForPush } from '@/constants/push';
 import { useT } from '@/i18n/LanguageContext';
@@ -217,8 +219,18 @@ export default function OtpVerificationScreen() {
             )}
           </Pressable>
           <ThemedText style={styles.agreementText}>
-            {t('iAgree')} <ThemedText style={styles.linkText}>{t('termsAndConditions')}</ThemedText> {t('and')}{' '}
-            <ThemedText style={styles.linkText}>{t('privacyPolicy')}</ThemedText>
+            {t('iAgree')}{' '}
+            <ThemedText
+              style={styles.linkText}
+              onPress={() => openExternalUrl(LEGAL_URLS.TERMS_AND_CONDITIONS)}>
+              {t('termsAndConditions')}
+            </ThemedText>{' '}
+            {t('and')}{' '}
+            <ThemedText
+              style={styles.linkText}
+              onPress={() => openExternalUrl(LEGAL_URLS.PRIVACY_POLICY)}>
+              {t('privacyPolicy')}
+            </ThemedText>
           </ThemedText>
         </View>
 

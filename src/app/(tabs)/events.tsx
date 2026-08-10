@@ -1,12 +1,13 @@
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { router, useFocusEffect } from 'expo-router';
+import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
-import { ApiService, type Event } from '@/constants/api';
+import { ApiService, formatGoLiveDate, mergeBroadcasts, type BroadcastItem } from '@/constants/api';
+import { MessageModal } from '@/components/message-modal';
 import { getApiBaseUrl } from '@/constants/environment';
 import { Spacing } from '@/constants/theme';
 import { useLanguage, useT, useTranslatedBatch } from '@/i18n/LanguageContext';
@@ -24,7 +25,7 @@ const BRAND = {
   chipBg: '#EDE3D2',
 };
 
-type Filter = 'All' | 'Free' | 'Paid' | 'Online' | 'Offline';
+type Filter = 'All' | 'Free' | 'Paid';
 
 const FILTERS: { key: Filter; emoji: string; labelKey: TranslationKey }[] = [
   { key: 'All',  emoji: '🙏', labelKey: 'filterAll'  },
@@ -33,27 +34,36 @@ const FILTERS: { key: Filter; emoji: string; labelKey: TranslationKey }[] = [
 ];
 
 const FALLBACK_COLORS = ['#7A1F18', '#1A3A5F', '#134E4A', '#4A1D96', '#7A3B1E'];
+const FALLBACK_EMOJIS = ['🪔', '📖', '🔥', '🙏', '⭐'];
 
 export default function EventsScreen() {
   const t = useT();
   const { lang } = useLanguage();
-  const [events, setEvents] = useState<Event[]>([]);
+  const [services, setServices] = useState<BroadcastItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<Filter>('All');
+  const loadedOnce = useRef(false);
+  // Formatted go-live date of the tapped upcoming service; null = notice hidden
+  const [upcomingNotice, setUpcomingNotice] = useState<string | null>(null);
 
-  useEffect(() => {
-    setLoading(true);
-    ApiService.getUpcomingEvents().then(data => {
-      setEvents(data);
-      setLoading(false);
-    });
-  }, [lang]);
+  // Refetch on every focus so services added while the app is open appear here.
+  useFocusEffect(
+    useCallback(() => {
+      if (!loadedOnce.current) setLoading(true);
+      Promise.all([
+        ApiService.getLiveBroadcasts(),
+        ApiService.getUpcomingBroadcasts(),
+      ]).then(([live, upcoming]) => {
+        setServices(mergeBroadcasts(live, upcoming));
+        setLoading(false);
+        loadedOnce.current = true;
+      });
+    }, [lang]),
+  );
 
-  const filtered = events.filter(e => {
-    if (filter === 'Free')    return !e.is_paid;
-    if (filter === 'Paid')    return e.is_paid;
-    if (filter === 'Online')  return e.is_online;
-    if (filter === 'Offline') return !e.is_online;
+  const filtered = services.filter(s => {
+    if (filter === 'Free') return !s.is_paid_event;
+    if (filter === 'Paid') return s.is_paid_event;
     return true;
   });
 
@@ -70,7 +80,7 @@ export default function EventsScreen() {
         </SafeAreaView>
       </LinearGradient>
 
-      {/* Filter chips */}
+      {/* Filter chips — temporarily commented out
       <View style={styles.chipRow}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
           {FILTERS.map(f => (
@@ -90,6 +100,7 @@ export default function EventsScreen() {
           ))}
         </ScrollView>
       </View>
+      */}
 
       {loading ? (
         <ActivityIndicator size="large" color={BRAND.primary} style={{ marginTop: 40 }} />
@@ -103,125 +114,137 @@ export default function EventsScreen() {
               <EmptyState message={t('noEventsFound')} />
             </View>
           ) : (
-            filtered.map((ev, i) => (
-              <EventCard key={ev.id} event={ev} colorIndex={i} />
+            filtered.map((item, i) => (
+              <ServiceCard
+                key={item.id}
+                item={item}
+                colorIndex={i}
+                onUpcomingPress={setUpcomingNotice}
+              />
             ))
           )}
         </ScrollView>
       )}
+
+      {/* Upcoming service notice */}
+      <MessageModal
+        visible={upcomingNotice !== null}
+        onClose={() => setUpcomingNotice(null)}
+        type="info"
+        title={t('upcomingEventTitle')}
+        message={t('upcomingEventMsg').replace('{date}', upcomingNotice ?? '')}
+      />
     </View>
   );
 }
 
-function EventCard({ event, colorIndex }: { event: Event; colorIndex: number }) {
+function ServiceCard({ item, colorIndex, onUpcomingPress }: {
+  item: BroadcastItem;
+  colorIndex: number;
+  onUpcomingPress: (whenStr: string) => void;
+}) {
   const t = useT();
-  const [eventName, venueName, description] = useTranslatedBatch([
-    event.event_name,
-    event.venue_name,
-    event.description,
-  ]);
-  const imageUri = event.mobile_image_url
-    ? `${getApiBaseUrl()}/${event.mobile_image_url}`
-    : null;
+  const [title, subTitle] = useTranslatedBatch([item.title, item.sub_title]);
+  const imageUri = item.image_url ? `${getApiBaseUrl()}/${item.image_url}` : null;
   const fallbackBg = FALLBACK_COLORS[colorIndex % FALLBACK_COLORS.length];
+  const fallbackEmoji = FALLBACK_EMOJIS[colorIndex % FALLBACK_EMOJIS.length];
 
-  const formatDate = (date: string) => {
+  const dateStr = (() => {
     try {
-      return new Date(date).toLocaleDateString('en-IN', {
+      return new Date(item.schedule_start_time).toLocaleDateString('en-IN', {
         day: 'numeric', month: 'short', year: 'numeric',
       });
-    } catch { return date; }
-  };
+    } catch { return ''; }
+  })();
 
-  const formatTime = (time: string) => {
+  const timeStr = (() => {
     try {
-      const [h, m] = time.split(':').map(Number);
-      const d = new Date(); d.setHours(h, m);
-      return d.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-    } catch { return time; }
-  };
+      return new Date(item.schedule_start_time).toLocaleTimeString('en-IN', {
+        hour: '2-digit', minute: '2-digit', hour12: true,
+      });
+    } catch { return ''; }
+  })();
 
-  const priceLabel = event.is_paid && event.amount != null
-    ? `₹${event.amount.toLocaleString()}`
-    : 'FREE';
+  const priceLabel = item.is_paid_event && item.event_price != null
+    ? `₹${item.event_price.toLocaleString()}`
+    : t('free');
 
-  const onPress = () => router.push({
-    pathname: '/event-detail',
+  const openStream = () => router.push({
+    pathname: '/webinar-watch',
     params: {
-      id: event.id,
-      title: event.event_name,
-      subtitle: event.venue_name,
-      description: event.description,
-      date: `${formatDate(event.start_date)} – ${formatDate(event.end_date)}`,
-      time: `${formatTime(event.start_time)} – ${formatTime(event.end_time)}`,
-      location: event.venue_name,
-      price: priceLabel,
-      isOnline: String(event.is_online),
-      status: event.status,
-      imageUri: imageUri ?? '',
+      id: item.id,
+      title: item.title,
+      sub_title: item.sub_title,
+      is_paid: String(item.is_paid_event),
     },
   });
 
   return (
-    <Pressable onPress={onPress} style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
+    <Pressable
+      onPress={
+        item.isLive
+          ? openStream
+          : () => onUpcomingPress(formatGoLiveDate(item.schedule_start_time))
+      }
+      style={({ pressed }) => [styles.card, pressed && styles.pressed]}>
       {/* Image */}
       <View style={[styles.cardImg, { backgroundColor: fallbackBg }]}>
         {imageUri ? (
           <Image source={{ uri: imageUri }} style={StyleSheet.absoluteFill} contentFit="cover" />
         ) : (
-          <ThemedText style={styles.cardEmoji}>🎉</ThemedText>
+          <ThemedText style={styles.cardEmoji}>{fallbackEmoji}</ThemedText>
         )}
 
-        {/* Status badge */}
-        {event.status === 'SCHEDULED' && (
+        {/* Live / Upcoming badge */}
+        {item.isLive ? (
+          <View style={styles.livePill}>
+            <View style={styles.liveDot} />
+            <ThemedText style={styles.livePillText}>LIVE</ThemedText>
+          </View>
+        ) : (
           <View style={styles.statusBadge}>
-            <ThemedText style={styles.statusText}>📅 Scheduled</ThemedText>
+            <ThemedText style={styles.statusText}>📅 {t('upcomingEvents')}</ThemedText>
           </View>
         )}
 
         {/* Price badge */}
-        <View style={[styles.priceBadge, !event.is_paid && styles.priceBadgeFree]}>
+        <View style={[styles.priceBadge, !item.is_paid_event && styles.priceBadgeFree]}>
           <ThemedText style={styles.priceText}>{priceLabel}</ThemedText>
-        </View>
-
-        {/* Online/Offline pill */}
-        <View style={styles.modePill}>
-          <ThemedText style={styles.modePillText}>
-            {event.is_online ? '💻 Online' : '📍 In-Person'}
-          </ThemedText>
         </View>
 
         {/* Title overlay */}
         <View style={styles.cardOverlay}>
-          <ThemedText style={styles.cardTitle} numberOfLines={2}>{eventName}</ThemedText>
-          {!!venueName && (
-            <ThemedText style={styles.cardSubtitle} numberOfLines={1}>📍 {venueName}</ThemedText>
+          <ThemedText style={styles.cardTitle} numberOfLines={2}>{title}</ThemedText>
+          {!!subTitle && (
+            <ThemedText style={styles.cardSubtitle} numberOfLines={1}>{subTitle}</ThemedText>
           )}
         </View>
       </View>
 
-      {/* Meta */}
-      <View style={styles.cardMeta}>
-        <View style={styles.metaItem}>
-          <ThemedText style={styles.metaIcon}>📅</ThemedText>
-          <ThemedText style={styles.metaText}>
-            {formatDate(event.start_date)}
-            {event.start_date !== event.end_date ? ` – ${formatDate(event.end_date)}` : ''}
-          </ThemedText>
-        </View>
-        <View style={styles.metaItem}>
-          <ThemedText style={styles.metaIcon}>🕐</ThemedText>
-          <ThemedText style={styles.metaText}>{formatTime(event.start_time)}</ThemedText>
-        </View>
-        <Pressable onPress={onPress} style={styles.viewDetailBtn}>
-          <ThemedText style={styles.viewDetailText}>{t('viewDetails')} ›</ThemedText>
-        </Pressable>
+      {/* Meta — divider only when an action row follows it */}
+      <View style={[styles.cardMeta, item.isLive && styles.cardMetaDivider]}>
+        {!!dateStr && (
+          <View style={styles.metaItem}>
+            <ThemedText style={styles.metaIcon}>📅</ThemedText>
+            <ThemedText style={styles.metaText}>{dateStr}</ThemedText>
+          </View>
+        )}
+        {!!timeStr && (
+          <View style={styles.metaItem}>
+            <ThemedText style={styles.metaIcon}>🕐</ThemedText>
+            <ThemedText style={styles.metaText}>{timeStr}</ThemedText>
+          </View>
+        )}
       </View>
 
-      {/* Description */}
-      {!!description && (
-        <View style={styles.descRow}>
-          <ThemedText style={styles.descText} numberOfLines={2}>{description}</ThemedText>
+      {/* Action */}
+      {item.isLive && (
+        <View style={styles.actionRow}>
+          <Pressable
+            onPress={openStream}
+            style={({ pressed }) => [styles.joinBtn, pressed && styles.pressed]}>
+            <ThemedText style={styles.joinBtnText}>{t('joinNowBtn')}</ThemedText>
+          </Pressable>
         </View>
       )}
     </Pressable>
@@ -249,11 +272,10 @@ const styles = StyleSheet.create({
   chipTextActive: { color: '#FFFFFF' },
 
   scroll: { flex: 1 },
-  scrollContent: { paddingHorizontal: Spacing.three, paddingBottom: Spacing.five, gap: 14 },
+  // paddingTop replaces the spacing the (now hidden) filter chip row provided
+  scrollContent: { paddingHorizontal: Spacing.three, paddingTop: Spacing.three, paddingBottom: Spacing.five, gap: 14 },
 
   emptyWrap: { alignItems: 'center', paddingTop: 60, gap: 12 },
-  emptyEmoji: { fontSize: 48 },
-  emptyText: { fontSize: 15, color: BRAND.textSecondary, fontWeight: '600' },
 
   card: {
     backgroundColor: BRAND.card,
@@ -267,7 +289,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     position: 'relative',
   },
-  cardEmoji: { fontSize: 72, opacity: 0.25 },
+  cardEmoji: { fontSize: 72, opacity: 0.35 },
 
   statusBadge: {
     position: 'absolute', top: 12, left: 12,
@@ -276,6 +298,15 @@ const styles = StyleSheet.create({
   },
   statusText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
+  livePill: {
+    position: 'absolute', top: 12, left: 12,
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    backgroundColor: '#DC2626',
+    paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999,
+  },
+  liveDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#FFFFFF' },
+  livePillText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
+
   priceBadge: {
     position: 'absolute', top: 12, right: 12,
     backgroundColor: 'rgba(0,0,0,0.6)',
@@ -283,13 +314,6 @@ const styles = StyleSheet.create({
   },
   priceBadgeFree: { backgroundColor: '#16A34A' },
   priceText: { color: '#FFFFFF', fontSize: 12, fontWeight: '800' },
-
-  modePill: {
-    position: 'absolute', bottom: 52, left: 12,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999,
-  },
-  modePillText: { color: '#FFFFFF', fontSize: 11, fontWeight: '700' },
 
   cardOverlay: {
     position: 'absolute', bottom: 0, left: 0, right: 0,
@@ -304,16 +328,25 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     paddingHorizontal: 14, paddingVertical: 12,
     gap: 12, flexWrap: 'wrap',
-    borderBottomWidth: 1, borderBottomColor: BRAND.border,
   },
+  cardMetaDivider: { borderBottomWidth: 1, borderBottomColor: BRAND.border },
   metaItem: { flexDirection: 'row', alignItems: 'center', gap: 4 },
   metaIcon: { fontSize: 12 },
   metaText: { fontSize: 12, color: BRAND.textSecondary, fontWeight: '500' },
-  viewDetailBtn: { marginLeft: 'auto' },
-  viewDetailText: { fontSize: 13, fontWeight: '700', color: BRAND.primary },
 
-  descRow: { paddingHorizontal: 14, paddingVertical: 10 },
-  descText: { fontSize: 13, color: BRAND.textSecondary, lineHeight: 19 },
+  actionRow: { paddingHorizontal: 14, paddingVertical: 12 },
+  joinBtn: {
+    backgroundColor: BRAND.primary,
+    borderRadius: 999,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  joinBtnText: { color: '#FFFFFF', fontSize: 14, fontWeight: '800' },
+  preBookBtn: {
+    backgroundColor: '#F5EFE6',
+    borderWidth: 1, borderColor: BRAND.border,
+  },
+  preBookBtnText: { color: BRAND.textSecondary, fontSize: 14, fontWeight: '800' },
 
   pressed: { opacity: 0.88 },
 });

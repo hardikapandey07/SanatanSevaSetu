@@ -125,10 +125,12 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 5000 }: Props) {
               src={slides[index].uri}
               style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' } as any}
             />
+            {/* Darkening gradient — commented out so the banner shows as-is
             <View
               style={[StyleSheet.absoluteFill, { background: 'linear-gradient(to left, rgba(0,0,0,0.72) 0%, transparent 55%)' } as any]}
               pointerEvents="none"
             />
+            */}
             <Overlay slide={slides[index]} />
           </View>
         </Pressable>
@@ -168,6 +170,7 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 5000 }: Props) {
                 transition={600}
                 cachePolicy="memory-disk"
               />
+              {/* Darkening gradient — commented out so the banner shows as-is
               <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.72)']}
                 start={{ x: 0.3, y: 0 }}
@@ -175,6 +178,7 @@ export function ImageSlider({ slides, onPress, autoPlayMs = 5000 }: Props) {
                 style={StyleSheet.absoluteFill}
                 pointerEvents="none"
               />
+              */}
               <Overlay slide={s} />
             </View>
           </Pressable>

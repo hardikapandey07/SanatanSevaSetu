@@ -1,8 +1,8 @@
 import { Image } from "expo-image";
 import { LinearGradient } from "expo-linear-gradient";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import { SymbolView } from "expo-symbols";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -21,10 +21,13 @@ import { ThemedText } from "@/components/themed-text";
 import {
   ApiService,
   TokenManager,
+  formatGoLiveDate,
+  mergeBroadcasts,
   type Banner,
-  type Broadcast,
+  type BroadcastItem,
   type Mandir,
 } from "@/constants/api";
+import { MessageModal } from "@/components/message-modal";
 import { unregisterForPush } from "@/constants/push";
 import { getApiBaseUrl } from "@/constants/environment";
 import { LANGUAGES } from "@/constants/languages";
@@ -203,33 +206,39 @@ export default function HomeScreen() {
   const [sideMenuOpen, setSideMenuOpen] = useState(false);
   const slideAnim = useState(() => new Animated.Value(-280))[0];
   const [banners, setBanners] = useState<Banner[]>([]);
-  const [liveItems, setLiveItems] = useState<Broadcast[]>([]);
-  const [upcomingItems, setUpcomingItems] = useState<Broadcast[]>([]);
-  const [liveLoading, setLiveLoading] = useState(true);
-  const [upcomingLoading, setUpcomingLoading] = useState(true);
+  const [services, setServices] = useState<BroadcastItem[]>([]);
+  const [servicesLoading, setServicesLoading] = useState(true);
   const [mandirs, setMandirs] = useState<Mandir[]>([]);
   const [mandirLoading, setMandirLoading] = useState(true);
+  // Formatted go-live date of the tapped upcoming service; null = notice hidden
+  const [upcomingNotice, setUpcomingNotice] = useState<string | null>(null);
   const unreadCount = useUnreadNotificationsCount();
   const translatedBanners = useTranslatedList(banners, ["title", "description"]);
+  const loadedOnce = useRef(false);
 
-  useEffect(() => {
-    setLiveLoading(true);
-    setUpcomingLoading(true);
-    setMandirLoading(true);
-    ApiService.getActiveBanners().then((data) => setBanners(data));
-    ApiService.getLiveBroadcasts().then((data) => {
-      setLiveItems(data);
-      setLiveLoading(false);
-    });
-    ApiService.getUpcomingBroadcasts().then((data) => {
-      setUpcomingItems(data);
-      setUpcomingLoading(false);
-    });
-    ApiService.getMandirs().then((data) => {
-      setMandirs(data);
-      setMandirLoading(false);
-    });
-  }, [lang]);
+  // Refetch every time the tab regains focus so newly added services show up
+  // without needing an app restart.
+  useFocusEffect(
+    useCallback(() => {
+      if (!loadedOnce.current) {
+        setServicesLoading(true);
+        setMandirLoading(true);
+      }
+      ApiService.getActiveBanners().then((data) => setBanners(data));
+      Promise.all([
+        ApiService.getLiveBroadcasts(),
+        ApiService.getUpcomingBroadcasts(),
+      ]).then(([live, upcoming]) => {
+        setServices(mergeBroadcasts(live, upcoming));
+        setServicesLoading(false);
+      });
+      ApiService.getMandirs().then((data) => {
+        setMandirs(data);
+        setMandirLoading(false);
+      });
+      loadedOnce.current = true;
+    }, [lang]),
+  );
 
   const openSideMenu = () => {
     setSideMenuOpen(true);
@@ -437,60 +446,13 @@ export default function HomeScreen() {
           </Pressable>
         </View>
 
-        {/* Live Services */}
-        <View style={styles.sectionHeaderRow}>
-          <View style={styles.liveSectionTitleRow}>
-            <View style={styles.liveDotIndicator} />
-            <ThemedText style={styles.sectionTitle}>
-              {t("liveServices")}
-            </ThemedText>
-          </View>
-          <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/broadcasts-list",
-                params: { type: "live" },
-              })
-            }
-            style={({ pressed }) => [pressed && styles.pressed]}
-          >
-            <ThemedText style={styles.seeAll}>See all ›</ThemedText>
-          </Pressable>
-        </View>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.hScroll}
-          contentContainerStyle={styles.hScrollContent}
-        >
-          {liveLoading ? (
-            [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
-          ) : liveItems.length > 0 ? (
-            liveItems.map((item, i) => (
-              <LiveServiceCard
-                key={item.id}
-                item={item}
-                bg={LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]}
-                emoji={LIVE_EMOJIS[i % LIVE_EMOJIS.length]}
-              />
-            ))
-          ) : (
-            <NoDataFound label={t('noLiveNow')} emoji="📺" />
-          )}
-        </ScrollView>
-
-        {/* Upcoming Events */}
+        {/* Upcoming Events — live + upcoming services merged */}
         <View style={styles.eventsHeaderRow}>
           <ThemedText style={styles.sectionTitle}>
             {t("upcomingEvents")}
           </ThemedText>
           <Pressable
-            onPress={() =>
-              router.push({
-                pathname: "/broadcasts-list",
-                params: { type: "upcoming" },
-              })
-            }
+            onPress={() => router.push("/(tabs)/events")}
             style={({ pressed }) => [pressed && styles.pressed]}
           >
             <ThemedText style={styles.viewAll}>{t("viewAll")} ›</ThemedText>
@@ -502,15 +464,24 @@ export default function HomeScreen() {
           style={styles.hScroll}
           contentContainerStyle={styles.hScrollContent}
         >
-          {upcomingLoading ? (
+          {servicesLoading ? (
             [1, 2, 3].map((i) => <BroadcastSkeleton key={i} />)
-          ) : upcomingItems.length > 0 ? (
-            upcomingItems.map((item, i) => (
-              <UpcomingEventCard
+          ) : services.length > 0 ? (
+            services.map((item, i) => (
+              <ServiceCard
                 key={item.id}
+                onUpcomingPress={setUpcomingNotice}
                 item={item}
-                bg={UPCOMING_BG_COLORS[i % UPCOMING_BG_COLORS.length]}
-                emoji={UPCOMING_EMOJIS[i % UPCOMING_EMOJIS.length]}
+                bg={
+                  item.isLive
+                    ? LIVE_BG_COLORS[i % LIVE_BG_COLORS.length]
+                    : UPCOMING_BG_COLORS[i % UPCOMING_BG_COLORS.length]
+                }
+                emoji={
+                  item.isLive
+                    ? LIVE_EMOJIS[i % LIVE_EMOJIS.length]
+                    : UPCOMING_EMOJIS[i % UPCOMING_EMOJIS.length]
+                }
               />
             ))
           ) : (
@@ -736,6 +707,15 @@ export default function HomeScreen() {
         </View>
       </Modal>
 
+      {/* ── Upcoming Service Notice ── */}
+      <MessageModal
+        visible={upcomingNotice !== null}
+        onClose={() => setUpcomingNotice(null)}
+        type="info"
+        title={t("upcomingEventTitle")}
+        message={t("upcomingEventMsg").replace("{date}", upcomingNotice ?? "")}
+      />
+
       {/* ── Language Picker Modal ── */}
       <Modal
         visible={langPickerOpen}
@@ -793,123 +773,48 @@ export default function HomeScreen() {
   );
 }
 
-function LiveServiceCard({
-  item, bg, emoji,
-}: { item: Broadcast; bg: string; emoji: string }) {
+function ServiceCard({
+  item, bg, emoji, onUpcomingPress,
+}: { item: BroadcastItem; bg: string; emoji: string; onUpcomingPress: (whenStr: string) => void }) {
   const t = useT();
   const [title, subTitle] = useTranslatedBatch([item.title, item.sub_title]);
-  const timeStr = (() => {
+  const whenStr = (() => {
     try {
-      return new Date(item.schedule_start_time).toLocaleTimeString("en-IN", {
-        hour: "2-digit",
-        minute: "2-digit",
-        hour12: true,
-      });
+      const d = new Date(item.schedule_start_time);
+      return item.isLive
+        ? d.toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
+        : d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
     } catch {
       return "";
     }
   })();
 
+  const openStream = () =>
+    router.push({
+      pathname: "/webinar-watch",
+      params: {
+        id: item.id,
+        title: item.title,
+        sub_title: item.sub_title,
+        is_paid: String(item.is_paid_event),
+      },
+    });
+
   return (
     <Pressable
-      onPress={() =>
-        router.push({
-          pathname: "/webinar-watch",
-          params: {
-            id: item.id,
-            title: item.title,
-            sub_title: item.sub_title,
-            is_paid: String(item.is_paid_event),
-          },
-        })
+      onPress={
+        item.isLive
+          ? openStream
+          : () => onUpcomingPress(formatGoLiveDate(item.schedule_start_time))
       }
       style={({ pressed }) => [
-        styles.liveServiceCard,
+        styles.upcomingCard,
         pressed && styles.pressed,
       ]}
-    >
-      <View style={[styles.liveServiceImg, { backgroundColor: bg }]}>
-        {item.image_url ? (
-          <Image
-            source={{ uri: `${getApiBaseUrl()}/${item.image_url}` }}
-            style={StyleSheet.absoluteFill}
-            contentFit="cover"
-          />
-        ) : (
-          <ThemedText style={styles.liveServiceEmoji}>{emoji}</ThemedText>
-        )}
-        <View style={styles.liveServiceBadgeRow}>
-          <View style={styles.livePill}>
-            <View style={styles.liveDot} />
-            <ThemedText style={styles.livePillText}>LIVE</ThemedText>
-          </View>
-        </View>
-        {item.is_paid_event && item.event_price != null && (
-          <View style={styles.viewersBadge}>
-            <ThemedText style={styles.viewersText}>
-              ₹{item.event_price}
-            </ThemedText>
-          </View>
-        )}
-      </View>
-      <ThemedText style={styles.liveServiceTitle} numberOfLines={2}>
-        {title}
-      </ThemedText>
-      <ThemedText style={styles.liveServiceLocation} numberOfLines={1}>
-        {subTitle}
-      </ThemedText>
-      {!!timeStr && (
-        <ThemedText style={styles.liveServiceTime}>{timeStr}</ThemedText>
-      )}
-      <Pressable
-        onPress={() =>
-          router.push({
-            pathname: "/webinar-watch",
-            params: {
-              id: item.id,
-              title: item.title,
-              sub_title: item.sub_title,
-              is_paid: String(item.is_paid_event),
-            },
-          })
-        }
-        style={({ pressed }) => [styles.watchBtn, pressed && styles.pressed]}
-      >
-        <ThemedText style={styles.watchBtnText}>{t('watchBtn')}</ThemedText>
-      </Pressable>
-    </Pressable>
-  );
-}
-
-function UpcomingEventCard({
-  item, bg, emoji,
-}: { item: Broadcast; bg: string; emoji: string }) {
-  const [title] = useTranslatedBatch([item.title]);
-  const dateStr = (() => {
-    try {
-      return new Date(item.schedule_start_time).toLocaleDateString("en-IN", {
-        day: "numeric",
-        month: "short",
-      });
-    } catch {
-      return "";
-    }
-  })();
-
-  return (
-    <Pressable
-      onPress={() =>
-        router.push({
-          pathname: "/webinar-watch",
-          params: {
-            id: item.id,
-            title: item.title,
-            sub_title: item.sub_title,
-            is_paid: String(item.is_paid_event),
-          },
-        })
-      }
-      style={({ pressed }) => [styles.upcomingCard, pressed && styles.pressed]}
     >
       <View style={[styles.upcomingImg, { backgroundColor: bg }]}>
         {item.image_url ? (
@@ -921,6 +826,14 @@ function UpcomingEventCard({
         ) : (
           <ThemedText style={{ fontSize: 40 }}>{emoji}</ThemedText>
         )}
+        {item.isLive && (
+          <View style={styles.liveServiceBadgeRow}>
+            <View style={styles.livePill}>
+              <View style={styles.liveDot} />
+              <ThemedText style={styles.livePillText}>LIVE</ThemedText>
+            </View>
+          </View>
+        )}
         <View
           style={[
             styles.upcomingBadge,
@@ -930,7 +843,7 @@ function UpcomingEventCard({
           <ThemedText style={styles.upcomingBadgeText}>
             {item.is_paid_event && item.event_price != null
               ? `₹${item.event_price}`
-              : "Free"}
+              : t("free")}
           </ThemedText>
         </View>
       </View>
@@ -938,10 +851,25 @@ function UpcomingEventCard({
         <ThemedText style={styles.upcomingTitle} numberOfLines={2}>
           {title}
         </ThemedText>
-        {!!dateStr && (
-          <ThemedText style={styles.upcomingDate}>📅 {dateStr}</ThemedText>
+        {!!subTitle && (
+          <ThemedText style={styles.serviceSub} numberOfLines={1}>
+            {subTitle}
+          </ThemedText>
+        )}
+        {!!whenStr && (
+          <ThemedText style={styles.upcomingDate}>
+            {item.isLive ? `🕐 ${whenStr}` : `📅 ${whenStr}`}
+          </ThemedText>
         )}
       </View>
+      {item.isLive && (
+        <Pressable
+          onPress={openStream}
+          style={({ pressed }) => [styles.watchBtn, pressed && styles.pressed]}
+        >
+          <ThemedText style={styles.watchBtnText}>{t("joinNowBtn")}</ThemedText>
+        </Pressable>
+      )}
     </Pressable>
   );
 }
@@ -1319,6 +1247,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   watchBtnText: { color: "#FFFFFF", fontSize: 12, fontWeight: "700" },
+  preBookBtn: {
+    backgroundColor: "#F5EFE6",
+    borderWidth: 1,
+    borderColor: BRAND.border,
+  },
+  preBookBtnText: { color: BRAND.textSecondary, fontSize: 12, fontWeight: "700" },
+  serviceSub: { fontSize: 11, color: BRAND.textSecondary },
 
   upcomingCard: {
     width: 200,

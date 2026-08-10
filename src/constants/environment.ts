@@ -17,6 +17,12 @@ export const getApiBaseUrl = () => {
   return ENV_CONFIG.API_BASE_URL;
 };
 
+// Public legal pages hosted on the marketing site
+export const LEGAL_URLS = {
+  PRIVACY_POLICY: 'https://sanatansevasetu.com/pages/privacy-policy.html',
+  TERMS_AND_CONDITIONS: 'https://sanatansevasetu.com/pages/Terms.html',
+};
+
 export const PUSH_CONFIG = {
   BASE_URL: ENV_CONFIG.API_BASE_URL,
   API_KEY: 'fcm_QbIiZoLMvhroe3nMqr5qSsUc050qwiMtiKwb4yYuvxA',

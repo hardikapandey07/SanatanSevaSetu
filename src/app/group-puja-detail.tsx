@@ -22,6 +22,7 @@ import { ApiService, TokenManager, type FAQ, type InitiatePujaBookingResponse, t
 import { ENV_CONFIG, getApiBaseUrl } from '@/constants/environment';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
 import { useT, useTranslatedBatch, useTranslatedList } from '@/i18n/LanguageContext';
+import type { TranslationKey } from '@/i18n/translations';
 
 const BRAND = {
   primary: '#E8731C',
@@ -40,6 +41,13 @@ const BRAND = {
 const TABS = [
   'aboutPujaTab', 'benefitsTab', 'templeDetailsTab', 'packagesTab', 'processTab', 'faqsTab',
 ] as const;
+
+/** puja_types come back as fixed API enums, so map them onto the static dictionary. */
+const PUJA_TYPE_KEYS: Record<string, TranslationKey> = {
+  Individual: 'individualPuja',
+  Group: 'groupPuja',
+  Lokpriya: 'lokpriyaPuja',
+};
 
 /** Strip HTML tags for plain-text display */
 function stripHtml(html: string): string {
@@ -111,6 +119,22 @@ export default function GroupPujaDetailScreen() {
   const translatedPackages = useTranslatedList(puja?.packages ?? [], ['package_title', 'person_count_description']);
   const translatedProcesses = useTranslatedList(processes, ['Title', 'Description']);
   const translatedFaqs = useTranslatedList(faqs, ['Question', 'Answer']);
+  const translatedPkgInfo = useTranslatedList(pkgInfoItems, ['Description']);
+
+  // Remaining API strings shown on this page: maas paksh, tithi, deity and dosha
+  // names. Batched together so they take one translate call rather than four.
+  const deityNames = puja?.deities?.map(d => d.deity_name) ?? [];
+  const doshaNames = puja?.doshas?.map(d => d.dosha_name) ?? [];
+  const metaTexts = useTranslatedBatch([
+    puja?.maas_paksh,
+    puja?.tithi,
+    ...deityNames,
+    ...doshaNames,
+  ]);
+  const maasPaksh = metaTexts[0] ?? '';
+  const tithiText = metaTexts[1] ?? '';
+  const deityText = metaTexts.slice(2, 2 + deityNames.length).join(', ');
+  const doshaText = metaTexts.slice(2 + deityNames.length).join(', ');
 
   if (loading) {
     return (
@@ -123,7 +147,7 @@ export default function GroupPujaDetailScreen() {
   if (!puja) {
     return (
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
-        <ThemedText>Puja not found</ThemedText>
+        <ThemedText>{t('pujaNotFound')}</ThemedText>
       </View>
     );
   }
@@ -149,7 +173,7 @@ export default function GroupPujaDetailScreen() {
               <ThemedText style={{ fontSize: 20 }}>🛕</ThemedText>
             </View>
             <View>
-              <ThemedText style={styles.headerTitle}>Sanatan Seva Setu</ThemedText>
+              <ThemedText style={styles.headerTitle}>{t('brand')}</ThemedText>
               <ThemedText style={styles.headerSubtitle}>{t('pujaSeva')}</ThemedText>
             </View>
           </View>
@@ -218,7 +242,9 @@ export default function GroupPujaDetailScreen() {
           <View style={styles.typePillsRow}>
             {puja.puja_types.map(tp => (
               <View key={tp} style={styles.typePill}>
-                <ThemedText style={styles.typePillText}>{tp}</ThemedText>
+                <ThemedText style={styles.typePillText}>
+                  {PUJA_TYPE_KEYS[tp] ? t(PUJA_TYPE_KEYS[tp]) : tp}
+                </ThemedText>
               </View>
             ))}
           </View>
@@ -226,7 +252,7 @@ export default function GroupPujaDetailScreen() {
 
         {/* Tag */}
         <View style={styles.tagRow}>
-          <ThemedText style={styles.tagText}>{puja.maas_paksh} • {puja.tithi}</ThemedText>
+          <ThemedText style={styles.tagText}>{maasPaksh} • {tithiText}</ThemedText>
         </View>
 
         {/* Title + meta */}
@@ -249,7 +275,7 @@ export default function GroupPujaDetailScreen() {
               <ThemedText style={styles.metaIcon}>🙏</ThemedText>
               <View style={{ flex: 1 }}>
                 <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>{t('deities')}</ThemedText>
-                <ThemedText style={styles.metaText}>{puja.deities.map(d => d.deity_name).join(', ')}</ThemedText>
+                <ThemedText style={styles.metaText}>{deityText}</ThemedText>
               </View>
             </View>
           )}
@@ -260,7 +286,7 @@ export default function GroupPujaDetailScreen() {
               <ThemedText style={styles.metaIcon}>🌙</ThemedText>
               <View style={{ flex: 1 }}>
                 <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>{t('tithi')}</ThemedText>
-                <ThemedText style={styles.metaText}>{puja.tithi}{puja.maas_paksh ? ` • ${puja.maas_paksh}` : ''}</ThemedText>
+                <ThemedText style={styles.metaText}>{tithiText}{maasPaksh ? ` • ${maasPaksh}` : ''}</ThemedText>
               </View>
             </View>
           )}
@@ -271,7 +297,7 @@ export default function GroupPujaDetailScreen() {
               <ThemedText style={styles.metaIcon}>✨</ThemedText>
               <View style={{ flex: 1 }}>
                 <ThemedText style={[styles.metaText, { fontWeight: '700', color: BRAND.text }]}>{t('doshas')}</ThemedText>
-                <ThemedText style={styles.metaText}>{puja.doshas.map(d => d.dosha_name).join(', ')}</ThemedText>
+                <ThemedText style={styles.metaText}>{doshaText}</ThemedText>
               </View>
             </View>
           )}
@@ -481,11 +507,11 @@ export default function GroupPujaDetailScreen() {
           </View>
           <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 16 }}>
             {/* What's included */}
-            {pkgInfoItems.length > 0 && (
+            {translatedPkgInfo.length > 0 && (
               <View style={styles.modalSection}>
                 <ThemedText style={styles.modalSectionTitle}>{t('whatsIncluded')}</ThemedText>
                 <View style={styles.checkList}>
-                  {pkgInfoItems.sort((a, b) => a.SerialNo - b.SerialNo).map(item => (
+                  {[...translatedPkgInfo].sort((a, b) => a.SerialNo - b.SerialNo).map(item => (
                     <View key={item.Id} style={styles.checkRow}>
                       <View style={styles.checkDot} />
                       <ThemedText style={styles.checkText}>{item.Description}</ThemedText>
@@ -587,9 +613,9 @@ export default function GroupPujaDetailScreen() {
                         setDevoteeMobile(profile.mobile || '');
                         if (res.pending) {
                           setInitiating(false);
-                          Alert.alert('Pending Booking', 'You have a pending payment. Continue?', [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Continue', onPress: () => { setRazorpayOrder(res.data!); setPkgModalVisible(false); setRazorpayVisible(true); } },
+                          Alert.alert(t('pendingBookingTitle'), t('pendingBookingMsg'), [
+                            { text: t('cancelBtn'), style: 'cancel' },
+                            { text: t('continueBtn'), onPress: () => { setRazorpayOrder(res.data!); setPkgModalVisible(false); setRazorpayVisible(true); } },
                           ]);
                           return;
                         }
@@ -597,10 +623,10 @@ export default function GroupPujaDetailScreen() {
                         setPkgModalVisible(false);
                         setRazorpayVisible(true);
                       } else {
-                        Alert.alert('Error', res.message || 'Failed to initiate booking.');
+                        Alert.alert(t('errorTitle'), res.message || t('bookingInitiateFailed'));
                       }
                     } catch {
-                      Alert.alert('Error', 'Something went wrong.');
+                      Alert.alert(t('errorTitle'), t('somethingWentWrong'));
                     } finally {
                       setInitiating(false);
                     }
@@ -651,11 +677,11 @@ export default function GroupPujaDetailScreen() {
                       setTransactionId(verifyRes.data?.transaction_id ?? '');
                       setPaymentSuccess(true);
                     } else {
-                      Alert.alert('Verification Failed', verifyRes.message);
+                      Alert.alert(t('verificationFailedTitle'), verifyRes.message);
                     }
                   } else if (msg.type === 'payment_failed') {
                     setRazorpayVisible(false);
-                    Alert.alert('Payment Failed', msg.description || 'Payment was not completed.');
+                    Alert.alert(t('paymentFailedTitle'), msg.description || t('paymentNotCompleted'));
                   } else if (msg.type === 'payment_dismissed') {
                     setRazorpayVisible(false);
                   }
@@ -697,6 +723,7 @@ export default function GroupPujaDetailScreen() {
 }
 
 function ExpandableText({ text, fallback }: { text: string; fallback?: string }) {
+  const t = useT();
   const [expanded, setExpanded] = useState(false);
   const LIMIT = 300;
   const content = text?.trim() || fallback || '';
@@ -708,7 +735,7 @@ function ExpandableText({ text, fallback }: { text: string; fallback?: string })
       </ThemedText>
       {isLong && (
         <Pressable onPress={() => setExpanded(e => !e)} style={({ pressed }) => [styles.readMoreBtn, pressed && styles.pressed]}>
-          <ThemedText style={styles.readMoreText}>{expanded ? 'Read Less ▲' : 'Read More ▼'}</ThemedText>
+          <ThemedText style={styles.readMoreText}>{expanded ? t('readLess') : t('readMore')}</ThemedText>
         </Pressable>
       )}
     </View>

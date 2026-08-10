@@ -2,6 +2,7 @@ import { Modal, Platform, Pressable, StyleSheet, View } from 'react-native';
 import { SymbolView } from 'expo-symbols';
 
 import { ThemedText } from '@/components/themed-text';
+import { useT } from '@/i18n/LanguageContext';
 
 const BRAND = {
   primary: '#E8731C',
@@ -14,15 +15,36 @@ const BRAND = {
   overlay: 'rgba(0, 0, 0, 0.5)',
 };
 
+type MessageType = 'success' | 'error' | 'info';
+
+const ACCENT: Record<MessageType, string> = {
+  success: BRAND.success,
+  error: BRAND.error,
+  info: BRAND.primary,
+};
+
+const ICON_BG: Record<MessageType, string> = {
+  success: '#F0F9FF',
+  error: '#FEF2F2',
+  info: '#FFF1DE',
+};
+
+const ICONS: Record<MessageType, { ios: string; android: string; web: string }> = {
+  success: { ios: 'checkmark.circle.fill', android: 'check_circle', web: 'check_circle' },
+  error: { ios: 'exclamationmark.triangle.fill', android: 'error', web: 'error' },
+  info: { ios: 'calendar', android: 'event', web: 'event' },
+};
+
 type Props = {
   visible: boolean;
   onClose: () => void;
   title: string;
   message: string;
-  type: 'success' | 'error';
+  type: MessageType;
 };
 
 export function MessageModal({ visible, onClose, title, message, type }: Props) {
+  const t = useT();
   return (
     <Modal
       visible={visible}
@@ -32,17 +54,10 @@ export function MessageModal({ visible, onClose, title, message, type }: Props) 
     >
       <View style={styles.overlay}>
         <View style={styles.modal}>
-          <View style={[
-            styles.iconContainer, 
-            { backgroundColor: type === 'success' ? '#F0F9FF' : '#FEF2F2' }
-          ]}>
+          <View style={[styles.iconContainer, { backgroundColor: ICON_BG[type] }]}>
             <SymbolView
-              name={{
-                ios: type === 'success' ? 'checkmark.circle.fill' : 'exclamationmark.triangle.fill',
-                android: type === 'success' ? 'check_circle' : 'error',
-                web: type === 'success' ? 'check_circle' : 'error',
-              }}
-              tintColor={type === 'success' ? BRAND.success : BRAND.error}
+              name={ICONS[type] as never}
+              tintColor={ACCENT[type]}
               size={32}
             />
           </View>
@@ -54,11 +69,11 @@ export function MessageModal({ visible, onClose, title, message, type }: Props) 
             onPress={onClose}
             style={({ pressed }) => [
               styles.button,
-              { backgroundColor: type === 'success' ? BRAND.success : BRAND.error },
+              { backgroundColor: ACCENT[type] },
               pressed && styles.buttonPressed,
             ]}
           >
-            <ThemedText style={styles.buttonText}>OK</ThemedText>
+            <ThemedText style={styles.buttonText}>{t('okBtn')}</ThemedText>
           </Pressable>
         </View>
       </View>

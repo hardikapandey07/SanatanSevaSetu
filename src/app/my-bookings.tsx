@@ -1,12 +1,12 @@
-import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { ThemedText } from '@/components/themed-text';
+import { BookingCertificate } from '@/components/booking-certificate';
 import { ApiService, type UserBooking } from '@/constants/api';
 import { Spacing } from '@/constants/theme';
 import { useT, useTranslatedList } from '@/i18n/LanguageContext';
@@ -45,7 +45,8 @@ export default function MyBookingsScreen() {
   const t = useT();
   const [bookings, setBookings] = useState<UserBooking[]>([]);
   const [loading, setLoading] = useState(true);
-  const [certVisible, setCertVisible] = useState(false);
+  // Booking whose certificate is open; null = modal hidden
+  const [certBooking, setCertBooking] = useState<UserBooking | null>(null);
 
   useEffect(() => {
     ApiService.getMyBookings().then(data => {
@@ -85,7 +86,7 @@ export default function MyBookingsScreen() {
       ) : bookings.length === 0 ? (
         <View style={styles.emptyWrap}>
           <ThemedText style={styles.emptyEmoji}>🙏</ThemedText>
-          <ThemedText style={styles.emptyText}>No bookings yet</ThemedText>
+          <ThemedText style={styles.emptyText}>{t('noBookingsYet')}</ThemedText>
         </View>
       ) : (
         <ScrollView
@@ -127,7 +128,7 @@ export default function MyBookingsScreen() {
                     size={13}
                   />
                   <ThemedText style={styles.metaText}>
-                    Booked on {formatDate(b.create_date)} · Puja on {formatDate(b.booking_date)}
+                    {t('bookedOn')} {formatDate(b.create_date)} · {t('pujaOn')} {formatDate(b.booking_date)}
                   </ThemedText>
                 </View>
 
@@ -140,14 +141,14 @@ export default function MyBookingsScreen() {
 
                 {!!b.gateway_payment_id && (
                   <View style={styles.txnRow}>
-                    <ThemedText style={styles.txnLabel}>Transaction ID</ThemedText>
+                    <ThemedText style={styles.txnLabel}>{t('transactionId')}</ThemedText>
                     <ThemedText style={styles.txnValue} numberOfLines={1} selectable>{b.gateway_payment_id}</ThemedText>
                   </View>
                 )}
 
                 {(b.status.toUpperCase() === 'COMPLETED' || b.status.toUpperCase() === 'CONFIRMED' || b.status.toUpperCase() === 'SUCCESS') && (
                   <Pressable
-                    onPress={() => setCertVisible(true)}
+                    onPress={() => setCertBooking(b)}
                     style={({ pressed }) => [styles.certificateBtn, pressed && styles.pressed]}
                   >
                     <SymbolView
@@ -155,7 +156,7 @@ export default function MyBookingsScreen() {
                       tintColor={BRAND.primary}
                       size={14}
                     />
-                    <ThemedText style={styles.certificateBtnText}>View Certificate</ThemedText>
+                    <ThemedText style={styles.certificateBtnText}>{t('viewCertificate')}</ThemedText>
                   </Pressable>
                 )}
               </View>
@@ -163,21 +164,12 @@ export default function MyBookingsScreen() {
           })}
         </ScrollView>
       )}
-      {/* Certificate Modal */}
-      <Modal visible={certVisible} transparent animationType="fade" onRequestClose={() => setCertVisible(false)}>
-        <View style={styles.certBackdrop}>
-          <View style={styles.certBox}>
-            <Pressable onPress={() => setCertVisible(false)} style={styles.certClose}>
-              <SymbolView name={{ ios: 'xmark', android: 'close', web: 'close' }} tintColor="#FFFFFF" size={18} />
-            </Pressable>
-            <Image
-              source={require('@/assets/images/certificate.jpeg')}
-              style={styles.certImage}
-              contentFit="contain"
-            />
-          </View>
-        </View>
-      </Modal>
+      {/* Generated booking certificate */}
+      <BookingCertificate
+        visible={certBooking !== null}
+        booking={certBooking}
+        onClose={() => setCertBooking(null)}
+      />
     </View>
   );
 }
@@ -242,16 +234,4 @@ const styles = StyleSheet.create({
   },
   certificateBtnText: { fontSize: 13, fontWeight: '700', color: BRAND.primary },
   pressed: { opacity: 0.85 },
-  certBackdrop: {
-    flex: 1, backgroundColor: 'rgba(0,0,0,0.85)',
-    alignItems: 'center', justifyContent: 'center', padding: 20,
-  },
-  certBox: { width: '100%', maxWidth: 400, position: 'relative' },
-  certClose: {
-    position: 'absolute', top: -14, right: -14, zIndex: 10,
-    width: 32, height: 32, borderRadius: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    alignItems: 'center', justifyContent: 'center',
-  },
-  certImage: { width: '100%', aspectRatio: 1.4, borderRadius: 12 },
 });

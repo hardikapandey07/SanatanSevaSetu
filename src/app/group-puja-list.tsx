@@ -19,7 +19,7 @@ import { Image } from 'expo-image';
 import { ThemedText } from '@/components/themed-text';
 import { ApiService, type ExtraField, type PujaInfo } from '@/constants/api';
 import { MaxContentWidth, Spacing } from '@/constants/theme';
-import { useT, useTranslatedList } from '@/i18n/LanguageContext';
+import { useT, useTranslatedBatch, useTranslatedList } from '@/i18n/LanguageContext';
 import type { TranslationKey } from '@/i18n/translations';
 import { EmptyState } from '@/components/empty-state';
 
@@ -134,11 +134,11 @@ export default function GroupPujaListScreen() {
   const locationOptions = [...new Set(allPujas.map(p => p.mandir_address).filter(Boolean))];
 
   const getCategoryOptions = (cat: FilterType): { id: string; label: string }[] => {
-    if (cat === 'Deity')    return deities.map(d => ({ id: d.id, label: d.description }));
-    if (cat === 'Dosha')    return doshas.map(d => ({ id: d.id, label: d.description }));
-    if (cat === 'Tithis')   return tithiOptions.map(t => ({ id: t, label: t }));
-    if (cat === 'Benefits') return benefits.map(b => ({ id: b.id, label: b.description }));
-    return locationOptions.map(l => ({ id: l, label: l }));
+    if (cat === 'Deity')    return deities.map(d => ({ id: d.id, label: optionLabel(d.description) }));
+    if (cat === 'Dosha')    return doshas.map(d => ({ id: d.id, label: optionLabel(d.description) }));
+    if (cat === 'Tithis')   return tithiOptions.map(ti => ({ id: ti, label: optionLabel(ti) }));
+    if (cat === 'Benefits') return benefits.map(b => ({ id: b.id, label: optionLabel(b.description) }));
+    return locationOptions.map(l => ({ id: l, label: optionLabel(l) }));
   };
 
   // Dropdown open state (kept for backward compat but unused now)
@@ -163,6 +163,23 @@ export default function GroupPujaListScreen() {
 
   // Unique tithis from loaded pujas
   const tithiOptions = [...new Set(allPujas.map(p => p.tithi).filter(Boolean))];
+
+  // Filter option labels come straight from the API and are not part of the
+  // static dictionary, so translate them here. Only the displayed label is
+  // translated — opt.id keeps the original value, which is what applyFilters()
+  // sends to the API.
+  const rawOptionLabels = [
+    ...deities.map(d => d.description),
+    ...doshas.map(d => d.description),
+    ...benefits.map(b => b.description),
+    ...tithiOptions,
+    ...locationOptions,
+  ];
+  const translatedOptionLabels = useTranslatedBatch(rawOptionLabels);
+  const optionLabel = (raw: string) => {
+    const i = rawOptionLabels.indexOf(raw);
+    return (i >= 0 ? translatedOptionLabels[i] : undefined) || raw;
+  };
 
   const [filteredPujas, setFilteredPujas] = useState<PujaInfo[]>([]);
   const [filterLoading, setFilterLoading] = useState(false);

@@ -191,6 +191,36 @@ export type Broadcast = {
 };
 export type GetBroadcastsResponse = { items: Broadcast[]; total_count: number; page: number; limit: number; total_pages: number };
 
+/** A broadcast tagged with whether it came from the live or the upcoming feed. */
+export type BroadcastItem = Broadcast & { isLive: boolean };
+
+/** Formats a broadcast's schedule_start_time for the "goes live on" notice. */
+export function formatGoLiveDate(schedule: string): string {
+  try {
+    return new Date(schedule).toLocaleString('en-IN', {
+      day: 'numeric', month: 'short', year: 'numeric',
+      hour: '2-digit', minute: '2-digit', hour12: true,
+    });
+  } catch { return schedule; }
+}
+
+/** Merges the live + upcoming broadcast feeds into one list, live entries first. */
+export function mergeBroadcasts(live: Broadcast[], upcoming: Broadcast[]): BroadcastItem[] {
+  const seen = new Set<string>();
+  const merged: BroadcastItem[] = [];
+  for (const item of live) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    merged.push({ ...item, isLive: true });
+  }
+  for (const item of upcoming) {
+    if (seen.has(item.id)) continue;
+    seen.add(item.id);
+    merged.push({ ...item, isLive: false });
+  }
+  return merged;
+}
+
 export type BroadcastAccessResponse = {
   status: 'authorized' | 'unauthorized' | 'subscribed' | string;
   action: 'allow_stream' | 'requires_payment' | string;
@@ -323,7 +353,8 @@ export type UserBooking = {
   booking_date: string;
   create_date: string;
   payment_id: string | null;
-  payment_no: string | null;
+  /** Serves as the human-facing booking number; the API sends it as a number. */
+  payment_no: number | string | null;
   gateway_payment_id: string | null;
   action_url: string;
 };
@@ -759,6 +790,16 @@ export class ApiService {
       if (r.ok) { const d = await r.json() as GetBroadcastsResponse; return d.items ?? []; }
       return [];
     } catch { return []; }
+  }
+
+  static async getMandirById(id: string): Promise<Mandir | null> {
+    try {
+      const url = `${this.baseUrl}${API_CONFIG.ENDPOINTS.GET_MANDIRS}/${id}`;
+      logCurl('GET', url, API_CONFIG.LANG_HEADERS);
+      const r = await fetch(url, { method: 'GET', headers: API_CONFIG.LANG_HEADERS });
+      if (r.ok) return await r.json() as Mandir;
+      return null;
+    } catch { return null; }
   }
 
   static async getServices(): Promise<Service[]> {
